@@ -36,10 +36,41 @@ li {
   padding: 8px 5px;
   border-bottom: 1px solid #eee;
   font-size: 0.9em;
+  /* white-space: nowrap; */ /* Removed to allow wrapping if text is very long before button */
+  /* overflow: hidden; */ /* Removed to allow button to be visible */
+  /* text-overflow: ellipsis; */ /* Handled by item-text span now */
+  cursor: pointer;
+  position: relative; /* For positioning the delete button */
+  display: flex; /* To align icon, text, and button */
+  align-items: center; /* Vertically align items */
+}
+
+.item-text {
+  flex-grow: 1; /* Allow text to take available space */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-right: 25px; /* Space for the delete button */
+}
+
+.delete-btn {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 5px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
   cursor: pointer;
+  font-size: 0.8em;
+  line-height: 1;
+  color: #333;
+  border: 1px solid #ccc;
+  display: none; /* Hidden by default */
+}
+
+li:hover .delete-btn {
+  display: inline-block; /* Show on hover */
 }
 
 li:hover {

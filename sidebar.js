@@ -79,13 +79,36 @@ function renderBookmarks(spaceId) {
       const favicon = document.createElement('img');
       favicon.className = 'favicon';
       favicon.src = `chrome://favicon/size/16@1x/${bookmark.url}`;
-      favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; }; // A default icon
+      favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; };
       li.appendChild(favicon);
-      li.appendChild(document.createTextNode(bookmark.title || bookmark.url));
+
+      const textNode = document.createElement('span');
+      textNode.className = 'item-text';
+      textNode.textContent = bookmark.title || bookmark.url;
+      li.appendChild(textNode);
+
       li.title = bookmark.url;
-      li.addEventListener('click', () => {
+      li.addEventListener('click', (e) => {
+        if (e.target.classList.contains('delete-btn')) return;
         chrome.tabs.create({ url: bookmark.url });
       });
+
+      const deleteBtn = document.createElement('span');
+      deleteBtn.innerHTML = '&#x2715;'; // Using HTML entity for 'x'
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.title = 'Delete bookmark';
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation(); // Prevent li click event
+        try {
+          await chrome.bookmarks.remove(bookmark.id);
+          space.bookmarks = space.bookmarks.filter(bm => bm.id !== bookmark.id);
+          renderBookmarks(spaceId);
+          console.log('Bookmark deleted:', bookmark.title);
+        } catch (error) {
+          console.error('Error deleting bookmark:', error);
+        }
+      });
+      li.appendChild(deleteBtn);
       bookmarksList.appendChild(li);
     });
   } else {
@@ -99,9 +122,8 @@ function renderOpenTabs(spaceId) {
   if (space && space.openTabs.length > 0) {
     space.openTabs.forEach(tab => {
       const li = document.createElement('li');
-      li.draggable = true; // Make tab item draggable
+      li.draggable = true;
       li.addEventListener('dragstart', (event) => {
-        // Include tab.id in the transferred data
         event.dataTransfer.setData('text/plain', JSON.stringify({ id: tab.id, url: tab.url, title: tab.title }));
         event.dataTransfer.effectAllowed = 'move';
       });
@@ -110,14 +132,41 @@ function renderOpenTabs(spaceId) {
       favicon.className = 'favicon';
       favicon.src = tab.favIconUrl || `chrome://favicon/size/16@1x/${tab.url}`;
       favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; };
-
       li.appendChild(favicon);
-      li.appendChild(document.createTextNode(tab.title || tab.url));
+
+      const textNode = document.createElement('span');
+      textNode.className = 'item-text';
+      textNode.textContent = tab.title || tab.url;
+      li.appendChild(textNode);
+
       li.title = tab.url;
       li.dataset.tabId = tab.id;
-      li.addEventListener('click', () => {
+      li.addEventListener('click', (e) => {
+        if (e.target.classList.contains('delete-btn')) return;
         chrome.tabs.update(tab.id, { active: true });
       });
+
+      const deleteBtn = document.createElement('span');
+      deleteBtn.innerHTML = '&#x2715;'; // Using HTML entity for 'x'
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.title = 'Close tab';
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation(); // Prevent li click event
+        try {
+          await chrome.tabs.remove(tab.id);
+          console.log('Tab close initiated via X button:', tab.id);
+        } catch (error) {
+          console.error('Error closing tab via X button:', error);
+          // Fallback UI update if onRemoved listener fails or is delayed
+          const space = spaces.find(s => s.id === currentSpaceId);
+          if (space) {
+            space.openTabs = space.openTabs.filter(t => t.id !== tab.id);
+            await storeTabs(currentSpaceId, space.openTabs);
+            renderOpenTabs(currentSpaceId);
+          }
+        }
+      });
+      li.appendChild(deleteBtn);
       tabsList.appendChild(li);
     });
   } else {

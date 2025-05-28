@@ -99,19 +99,23 @@ function renderOpenTabs(spaceId) {
   if (space && space.openTabs.length > 0) {
     space.openTabs.forEach(tab => {
       const li = document.createElement('li');
+      li.draggable = true; // Make tab item draggable
+      li.addEventListener('dragstart', (event) => {
+        event.dataTransfer.setData('text/plain', JSON.stringify({ url: tab.url, title: tab.title }));
+        event.dataTransfer.effectAllowed = 'move';
+      });
+
       const favicon = document.createElement('img');
       favicon.className = 'favicon';
-      // Attempt to get favicon, fallback if error
       favicon.src = tab.favIconUrl || `chrome://favicon/size/16@1x/${tab.url}`;
-      favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; }; // A default icon
+      favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; };
 
       li.appendChild(favicon);
       li.appendChild(document.createTextNode(tab.title || tab.url));
       li.title = tab.url;
-      li.dataset.tabId = tab.id; // Store tabId for potential actions like closing
+      li.dataset.tabId = tab.id;
       li.addEventListener('click', () => {
         chrome.tabs.update(tab.id, { active: true });
-        // Potentially close sidebar or switch window if needed
       });
       tabsList.appendChild(li);
     });
@@ -119,6 +123,42 @@ function renderOpenTabs(spaceId) {
     tabsList.innerHTML = '<li>No open tabs in this space.</li>';
   }
 }
+
+// Modify the bookmarks list container to handle drop events
+bookmarksList.addEventListener('dragover', (event) => {
+  event.preventDefault(); // Allow drop
+  event.dataTransfer.dropEffect = 'move';
+});
+
+bookmarksList.addEventListener('drop', async (event) => {
+  event.preventDefault();
+  if (!currentSpaceId) return;
+
+  const space = spaces.find(s => s.id === currentSpaceId);
+  if (!space) return;
+
+  try {
+    const tabData = JSON.parse(event.dataTransfer.getData('text/plain'));
+    if (tabData.url && tabData.title) {
+      await chrome.bookmarks.create({
+        parentId: space.id, // space.id is the bookmark folder ID
+        title: tabData.title,
+        url: tabData.url
+      });
+      // Refresh bookmarks for the current space
+      const updatedBookmarkTree = await chrome.bookmarks.getSubTree(space.id);
+      if (updatedBookmarkTree && updatedBookmarkTree[0] && updatedBookmarkTree[0].children) {
+          space.bookmarks = updatedBookmarkTree[0].children.filter(bm => bm.url);
+      }
+      renderBookmarks(currentSpaceId);
+      console.log('Tab dropped and bookmark created:', tabData.title);
+    } else {
+      console.warn('Dropped data does not contain valid URL and title.');
+    }
+  } catch (error) {
+    console.error('Error creating bookmark from dropped tab:', error);
+  }
+});
 
 function renderSpacesFooter() {
   spacesList.innerHTML = ''; // Clear previous spaces

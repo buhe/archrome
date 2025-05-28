@@ -227,6 +227,9 @@ bookmarksList.addEventListener('drop', async (event) => {
 function renderSpacesFooter() {
   spacesList.innerHTML = ''; // Clear previous spaces
   spaces.forEach(space => {
+    if(space.name === 'pin') {
+      return;
+    }
     const li = document.createElement('li');
     // Use space.icon if it's an emoji, otherwise use first two letters of name or a default
     if (isEmoji(space.icon)) {

@@ -258,18 +258,32 @@ async function getLastActiveSpace() {
 
 // When a tab is created
 chrome.tabs.onCreated.addListener(async (tab) => {
+    if (isSwitchingSpace) {
+        console.log('onCreated: isSwitchingSpace is true, switchSpace will handle this tab if necessary.', tab.id);
+        return; // Defer to switchSpace logic during space switching
+    }
+
     if (!currentSpaceId) return; // Only track if a space is active
-    // Avoid adding the new tab page if it's immediately replaced or if it's a special page
-    if (tab.url && tab.url.startsWith('chrome://')) return;
+
+    const initialUrl = tab.url || tab.pendingUrl;
+    // Avoid adding tabs with internal URLs or if the URL is not yet defined.
+    if (!initialUrl || initialUrl.startsWith('chrome://') || initialUrl.startsWith('about:')) {
+        console.log('Tab created with internal or undefined URL, not adding to space via onCreated:', initialUrl);
+        return;
+    }
 
     const space = spaces.find(s => s.id === currentSpaceId);
-    if (space) {
+    if (space && space.openTabs) { // Ensure space.openTabs exists
         // Check if it's a tab we just opened for this space, or a genuinely new one
-        if (!space.openTabs.find(t => t.id === tab.id || t.url === tab.pendingUrl)) {
-            console.log('Tab created and added to current space:', tab);
-            space.openTabs.push({ id: tab.id, url: tab.url || tab.pendingUrl, title: tab.title, favIconUrl: tab.favIconUrl });
+        // Check by ID first, as URL might be pending/changing for newly created tabs by user.
+        if (!space.openTabs.find(t => t.id === tab.id)) {
+            console.log('Tab created (user action) and added to current space:', tab);
+            const newTabInfo = { id: tab.id, url: initialUrl, title: tab.title, favIconUrl: tab.favIconUrl };
+            space.openTabs.push(newTabInfo);
             await storeTabs(currentSpaceId, space.openTabs);
             renderOpenTabs(currentSpaceId);
+        } else {
+            console.log('onCreated: Tab already tracked or URL matched, potentially updated by onUpdated later if URL changes from pending.', tab.id);
         }
     }
 });

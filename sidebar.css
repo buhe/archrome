@@ -26,6 +26,18 @@ h2 {
   padding-bottom: 4px;
 }
 
+.pinned-section h2 {
+  /* Optional: Slightly different styling for Pinned section title if needed */
+  /* For now, it will inherit the general h2 style */
+}
+
+.pinned-section ul#pinned-list {
+  /* Optional: Specific styling for the pinned list if different from other lists */
+  /* For now, it will inherit general ul/li styles */
+  /* Example: Different background or padding */
+  /* padding-bottom: 10px; */
+}
+
 ul {
   list-style-type: none;
   padding: 0;

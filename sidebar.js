@@ -17,6 +17,7 @@ let isSwitchingSpace = false; // ADDED
 const bookmarksList = document.getElementById('bookmarks-list');
 const tabsList = document.getElementById('tabs-list');
 const spacesList = document.getElementById('spaces-list');
+const pinnedList = document.getElementById('pinned-list'); // Added for pinned bookmarks
 
 // --- Bookmarks and Spaces Logic ---
 async function loadSpaces() {
@@ -483,5 +484,56 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 });
 
 
+// Function to render pinned bookmarks
+async function renderPinnedBookmarks() {
+  console.log('Rendering pinned bookmarks...');
+  pinnedList.innerHTML = ''; // Clear previous pinned bookmarks
+  try {
+    const bookmarkTree = await chrome.bookmarks.getTree();
+    const bookmarkBar = bookmarkTree[0].children.find(node => node.id === '1'); // Bookmarks Bar
+
+    if (bookmarkBar && bookmarkBar.children) {
+      const pinFolder = bookmarkBar.children.find(node => node.title.toLowerCase() === 'pin' && node.children);
+      if (pinFolder && pinFolder.children.length > 0) {
+        pinFolder.children.filter(bm => bm.url).forEach(bookmark => {
+          const li = document.createElement('li');
+          const favicon = document.createElement('img');
+          favicon.className = 'favicon';
+          favicon.src = `chrome://favicon/size/16@1x/${bookmark.url}`;
+          favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; };
+          li.appendChild(favicon);
+
+          const textNode = document.createElement('span');
+          textNode.className = 'item-text'; // Reuse existing class for consistency
+          textNode.textContent = bookmark.title || bookmark.url;
+          li.appendChild(textNode);
+
+          li.title = bookmark.url;
+          li.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-btn')) return;
+            chrome.tabs.create({ url: bookmark.url });
+          });
+
+          // Optional: Add delete button for pinned items if needed, similar to other lists
+          // For now, pinned items are not deletable from this view to keep it simple
+          // and reflect that they are managed in the main bookmarks 'pin' folder.
+
+          pinnedList.appendChild(li);
+        });
+      } else {
+        pinnedList.innerHTML = '<li>No pinned bookmarks found in "pin" folder.</li>';
+      }
+    } else {
+      pinnedList.innerHTML = '<li>Bookmark bar not found.</li>';
+    }
+  } catch (error) {
+    console.error('Error rendering pinned bookmarks:', error);
+    pinnedList.innerHTML = '<li>Error loading pinned bookmarks.</li>';
+  }
+}
+
 // Initial load
-document.addEventListener('DOMContentLoaded', loadSpaces);
+document.addEventListener('DOMContentLoaded', async () => {
+  await renderPinnedBookmarks(); // Load pinned items first
+  await loadSpaces(); // Then load spaces and their content
+});

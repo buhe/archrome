@@ -78,6 +78,7 @@ function renderBookmarks(spaceId) {
       const favicon = document.createElement('img');
       favicon.className = 'favicon';
       favicon.src = `chrome://favicon/size/16@1x/${bookmark.url}`;
+      favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; }; // A default icon
       li.appendChild(favicon);
       li.appendChild(document.createTextNode(bookmark.title || bookmark.url));
       li.title = bookmark.url;
@@ -122,7 +123,14 @@ function renderSpacesFooter() {
   spacesList.innerHTML = ''; // Clear previous spaces
   spaces.forEach(space => {
     const li = document.createElement('li');
-    li.textContent = space.icon;
+    // Use space.icon if it's an emoji, otherwise use first two letters of name or a default
+    if (isEmoji(space.icon)) {
+        li.textContent = space.icon;
+    } else if (space.name && space.name.length > 0) {
+        li.textContent = space.name.substring(0, 2).toUpperCase();
+    } else {
+        li.textContent = 'SP'; // Default placeholder if no name and no emoji
+    }
     li.title = space.name;
     li.dataset.spaceId = space.id;
     if (space.id === currentSpaceId) {
@@ -292,26 +300,60 @@ chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
 // When a tab is updated (e.g., URL change)
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (!currentSpaceId) return;
-    // We are interested in 'complete' status and URL changes
-    if (changeInfo.status === 'complete' && tab.url) {
-        const space = spaces.find(s => s.id === currentSpaceId);
-        if (space) {
-            const tabIndex = space.openTabs.findIndex(t => t.id === tabId);
-            if (tabIndex !== -1) {
-                // Update existing tab info
-                space.openTabs[tabIndex] = { id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl };
-                console.log('Tab updated in current space:', tab);
-            } else {
-                // If tab was not in the list (e.g. navigated from a new tab page that wasn't tracked)
-                // Add it if it's not a chrome internal page
-                if (tab.url && !tab.url.startsWith('chrome://')) {
-                    space.openTabs.push({ id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
-                    console.log('New navigation, tab added to current space:', tab);
-                }
-            }
-            await storeTabs(currentSpaceId, space.openTabs);
-            renderOpenTabs(currentSpaceId);
+
+    const space = spaces.find(s => s.id === currentSpaceId);
+    if (!space) return;
+
+    let tabDataChanged = false;
+    const tabIndex = space.openTabs.findIndex(t => t.id === tabId);
+
+    if (tabIndex !== -1) {
+        // Tab exists, update its info if relevant properties changed
+        const currentTabData = space.openTabs[tabIndex];
+        let updated = false; // Flag to track if currentTabData was modified in this block
+
+        // Check for specific changes and update currentTabData
+        if (changeInfo.url && currentTabData.url !== tab.url) {
+            currentTabData.url = tab.url;
+            updated = true;
         }
+        if (changeInfo.title && currentTabData.title !== tab.title) {
+            currentTabData.title = tab.title;
+            updated = true;
+        }
+        if (changeInfo.favIconUrl && currentTabData.favIconUrl !== tab.favIconUrl) {
+            currentTabData.favIconUrl = tab.favIconUrl;
+            updated = true;
+        }
+
+        // If status is complete, ensure all data is fresh from the 'tab' object.
+        if (changeInfo.status === 'complete') {
+            if (currentTabData.url !== tab.url ||
+                currentTabData.title !== tab.title ||
+                currentTabData.favIconUrl !== tab.favIconUrl ||
+                currentTabData.id !== tab.id) {
+                space.openTabs[tabIndex] = { id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl };
+                updated = true; 
+            }
+        }
+        
+        if (updated) {
+            // If we directly modified currentTabData, it's already part of space.openTabs[tabIndex].
+            // If we replaced space.openTabs[tabIndex], that's also fine.
+            tabDataChanged = true;
+        }
+
+    } else if (changeInfo.status === 'complete' && tab.url && !tab.url.startsWith('chrome://')) {
+        // Tab is new to this space and has completed loading with a valid URL.
+        space.openTabs.push({ id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
+        console.log('Tab completed and added to current space:', tab);
+        tabDataChanged = true;
+    }
+
+    if (tabDataChanged) {
+        console.log('Tab data changed, storing and re-rendering:', tabId, changeInfo, tab);
+        await storeTabs(currentSpaceId, space.openTabs);
+        renderOpenTabs(currentSpaceId);
     }
 });
 

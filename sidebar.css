@@ -1,0 +1,136 @@
+body {
+  font-family: sans-serif;
+  margin: 0;
+  padding: 10px;
+  width: 300px; /* Adjust as needed */
+  background-color: #f4f4f9;
+  color: #333;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+.container {
+  flex-grow: 1;
+  overflow-y: auto; /* For scrolling if content exceeds height */
+  padding-bottom: 50px; /* Space for the footer */
+}
+
+h2 {
+  font-size: 1em;
+  color: #555;
+  margin-top: 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4px;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  padding: 8px 5px;
+  border-bottom: 1px solid #eee;
+  font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+li:hover {
+  background-color: #e9e9f3;
+}
+
+li img.favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid #ccc;
+  margin: 15px 0;
+}
+
+.spaces-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #e0e0e0;
+  padding: 8px 10px;
+  border-top: 1px solid #ccc;
+  display: flex;
+  justify-content: center; /* Center icons if not full width */
+  overflow-x: auto; /* Horizontal scroll for many spaces */
+  white-space: nowrap; /* Keep icons in one line */
+  height: 40px; /* Fixed height for the footer */
+  box-sizing: border-box;
+}
+
+.spaces-footer ul {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.spaces-footer li {
+  padding: 5px 10px;
+  margin: 0 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.2em; /* For emoji icons */
+  border: none; /* Remove bottom border from general li style */
+}
+
+.spaces-footer li.active-space {
+  background-color: #c0c0c0;
+  font-weight: bold;
+}
+
+.spaces-footer li:hover {
+  background-color: #d0d0d0;
+}
+
+/* Scrollbar styling */
+.container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.container::-webkit-scrollbar-track {
+  background: #f4f4f9;
+}
+
+.container::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+.container::-webkit-scrollbar-thumb:hover {
+  background: #bbb;
+}
+
+.spaces-footer::-webkit-scrollbar {
+  height: 6px;
+}
+
+.spaces-footer::-webkit-scrollbar-track {
+  background: #e0e0e0;
+}
+
+.spaces-footer::-webkit-scrollbar-thumb {
+  background: #b0b0b0;
+  border-radius: 3px;
+}
+
+.spaces-footer::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}

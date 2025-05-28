@@ -101,7 +101,8 @@ function renderOpenTabs(spaceId) {
       const li = document.createElement('li');
       li.draggable = true; // Make tab item draggable
       li.addEventListener('dragstart', (event) => {
-        event.dataTransfer.setData('text/plain', JSON.stringify({ url: tab.url, title: tab.title }));
+        // Include tab.id in the transferred data
+        event.dataTransfer.setData('text/plain', JSON.stringify({ id: tab.id, url: tab.url, title: tab.title }));
         event.dataTransfer.effectAllowed = 'move';
       });
 
@@ -139,7 +140,7 @@ bookmarksList.addEventListener('drop', async (event) => {
 
   try {
     const tabData = JSON.parse(event.dataTransfer.getData('text/plain'));
-    if (tabData.url && tabData.title) {
+    if (tabData.url && tabData.title && tabData.id) { // Check for id as well
       await chrome.bookmarks.create({
         parentId: space.id, // space.id is the bookmark folder ID
         title: tabData.title,
@@ -152,11 +153,24 @@ bookmarksList.addEventListener('drop', async (event) => {
       }
       renderBookmarks(currentSpaceId);
       console.log('Tab dropped and bookmark created:', tabData.title);
+
+      // Remove the tab from openTabs and close it
+      const tabIdToRemove = tabData.id;
+      space.openTabs = space.openTabs.filter(t => t.id !== tabIdToRemove);
+      try {
+        await chrome.tabs.remove(tabIdToRemove);
+        console.log('Original tab closed:', tabIdToRemove);
+      } catch (e) {
+        console.warn('Could not close tab, it might have been closed already:', tabIdToRemove, e);
+      }
+      await storeTabs(currentSpaceId, space.openTabs);
+      renderOpenTabs(currentSpaceId);
+
     } else {
-      console.warn('Dropped data does not contain valid URL and title.');
+      console.warn('Dropped data does not contain valid ID, URL and title.');
     }
   } catch (error) {
-    console.error('Error creating bookmark from dropped tab:', error);
+    console.error('Error processing dropped tab:', error);
   }
 });
 

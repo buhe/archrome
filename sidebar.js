@@ -12,6 +12,7 @@ function generateUniqueId() {
 
 let currentSpaceId = null;
 let spaces = []; // Array to store space objects {id, icon, name, bookmarks, openTabs}
+let isSwitchingSpace = false; // ADDED
 
 const bookmarksList = document.getElementById('bookmarks-list');
 const tabsList = document.getElementById('tabs-list');
@@ -144,73 +145,74 @@ function renderSpacesFooter() {
 async function switchSpace(newSpaceId) {
   if (currentSpaceId === newSpaceId) return; // Already in this space
 
-  console.log(`Switching to space: ${newSpaceId}`);
-  const oldSpaceId = currentSpaceId;
-  currentSpaceId = newSpaceId;
+  isSwitchingSpace = true; // ADDED
+  try { // ADDED
+    console.log(`Switching to space: ${newSpaceId}`);
+    const oldSpaceId = currentSpaceId;
+    currentSpaceId = newSpaceId;
 
-  // Update UI for spaces footer
-  renderSpacesFooter();
+    // Update UI for spaces footer
+    renderSpacesFooter();
 
-  // Render bookmarks for the new space
-  renderBookmarks(newSpaceId);
+    // Render bookmarks for the new space
+    renderBookmarks(newSpaceId);
 
-  // Tab management
-  const newSpace = spaces.find(s => s.id === newSpaceId);
-  const oldSpace = spaces.find(s => s.id === oldSpaceId);
+    // Tab management
+    const newSpace = spaces.find(s => s.id === newSpaceId);
+    const oldSpace = spaces.find(s => s.id === oldSpaceId);
 
-  // Close tabs of the old space (if any)
-  if (oldSpace && oldSpace.openTabs.length > 0) {
-    const oldTabIds = oldSpace.openTabs.map(t => t.id);
-    // Filter out tabs that might have been closed by the user manually
-    const currentTabs = await chrome.tabs.query({});
-    const currentTabIds = currentTabs.map(t => t.id);
-    const tabsToClose = oldTabIds.filter(id => currentTabIds.includes(id));
-    if (tabsToClose.length > 0) {
-        try {
-            await chrome.tabs.remove(tabsToClose);
-            console.log('Closed tabs from old space:', tabsToClose);
-        } catch (e) {
-            console.warn('Some tabs might have already been closed:', e);
-        }
-    }
-    oldSpace.openTabs = []; // Clear open tabs for old space
-    await storeTabs(oldSpace.id, oldSpace.openTabs);
-  }
-
-  // Open/restore tabs for the new space
-  if (newSpace) {
-    if (newSpace.openTabs.length > 0) {
-      for (const tabInfo of newSpace.openTabs) {
-        try {
-            // Check if tab still exists (e.g. if user closed it manually and it's still in storage)
-            let existingTab = null;
-            try { existingTab = await chrome.tabs.get(tabInfo.id); } catch (e) { /* tab doesn't exist */ }
-
-            if (existingTab) {
-                await chrome.tabs.update(tabInfo.id, { active: false }); // Ensure it's not active initially if multiple
-            } else {
-                const newTab = await chrome.tabs.create({ url: tabInfo.url, active: false });
-                tabInfo.id = newTab.id; // Update ID in case it was restored
-            }
-        } catch (e) {
-            console.warn(`Could not create or update tab ${tabInfo.url}:`, e);
-            // If tab creation fails, remove it from the list for this space
-            newSpace.openTabs = newSpace.openTabs.filter(t => t.url !== tabInfo.url);
-        }
+    // Close tabs of the old space (if any)
+    if (oldSpace && oldSpace.openTabs.length > 0) {
+      const oldTabIds = oldSpace.openTabs.map(t => t.id);
+      // Filter out tabs that might have been closed by the user manually
+      const currentTabs = await chrome.tabs.query({});
+      const currentTabIds = currentTabs.map(t => t.id);
+      const tabsToClose = oldTabIds.filter(id => currentTabIds.includes(id));
+      if (tabsToClose.length > 0) {
+          try {
+              await chrome.tabs.remove(tabsToClose);
+              console.log('Closed tabs from old space:', tabsToClose);
+          } catch (e) {
+              console.warn('Some tabs might have already been closed:', e);
+          }
       }
-      // Make the first tab active if any were opened/updated
-      if (newSpace.openTabs.length > 0) {
-        await chrome.tabs.update(newSpace.openTabs[0].id, { active: true });
-      }
-    } else {
-      // If no tabs are stored for this space, open a new tab (e.g., new tab page or a default page for the space)
-      const newTab = await chrome.tabs.create({ active: true }); // Opens default new tab page
-      newSpace.openTabs.push({ id: newTab.id, url: newTab.url, title: newTab.title, favIconUrl: newTab.favIconUrl });
+    // Note: The lines that previously cleared oldSpace.openTabs and stored it were already removed in a prior step.
     }
-    await storeTabs(newSpace.id, newSpace.openTabs);
-    renderOpenTabs(newSpace.id);
-  }
-  await setLastActiveSpace(newSpaceId);
+
+    // Open/restore tabs for the new space
+    if (newSpace) {
+      if (newSpace.openTabs && newSpace.openTabs.length > 0) { // check newSpace.openTabs exists
+        for (const tabInfo of newSpace.openTabs) {
+          try {
+              let existingTab = null;
+              try { existingTab = await chrome.tabs.get(tabInfo.id); } catch (e) { /* tab doesn't exist */ }
+
+              if (existingTab) {
+                  await chrome.tabs.update(tabInfo.id, { active: false });
+              } else {
+                  const newTab = await chrome.tabs.create({ url: tabInfo.url, active: false });
+                  tabInfo.id = newTab.id; // Update ID in case it was restored
+              }
+          } catch (e) {
+              console.warn(`Could not create or update tab ${tabInfo.url}:`, e);
+              newSpace.openTabs = newSpace.openTabs.filter(t => t.url !== tabInfo.url);
+          }
+        }
+        if (newSpace.openTabs.length > 0) {
+          await chrome.tabs.update(newSpace.openTabs[0].id, { active: true });
+        }
+      } else {
+        if (!newSpace.openTabs) newSpace.openTabs = []; // ADDED Ensure openTabs is an array
+        const newTab = await chrome.tabs.create({ active: true });
+        newSpace.openTabs.push({ id: newTab.id, url: newTab.url, title: newTab.title, favIconUrl: newTab.favIconUrl });
+      }
+      await storeTabs(newSpace.id, newSpace.openTabs);
+      renderOpenTabs(newSpace.id);
+    }
+    await setLastActiveSpace(newSpaceId);
+  } finally { // ADDED
+    isSwitchingSpace = false; // ADDED
+  } // ADDED
 }
 
 // --- Storage Logic for Tabs and Last Active Space ---
@@ -274,27 +276,33 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 
 // When a tab is removed
 chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
-    if (!currentSpaceId) return;
-    const space = spaces.find(s => s.id === currentSpaceId);
-    if (space) {
-        const initialLength = space.openTabs.length;
-        space.openTabs = space.openTabs.filter(t => t.id !== tabId);
-        if (space.openTabs.length < initialLength) {
-            console.log('Tab removed from current space:', tabId);
-            await storeTabs(currentSpaceId, space.openTabs);
-            renderOpenTabs(currentSpaceId);
-        }
-    }
-    // Also check other spaces, in case a tab belonging to an inactive space was closed
-    for (const s of spaces) {
-        if (s.id !== currentSpaceId) {
-            const initialLengthInactive = s.openTabs.length;
-            s.openTabs = s.openTabs.filter(t => t.id !== tabId);
-            if (s.openTabs.length < initialLengthInactive) {
-                await storeTabs(s.id, s.openTabs);
+    // Logic for the current space (if any)
+    if (currentSpaceId) { // MODIFIED (merged !currentSpaceId check)
+        const space = spaces.find(s => s.id === currentSpaceId);
+        if (space && space.openTabs) { // ADDED check for space.openTabs
+            const initialLength = space.openTabs.length;
+            space.openTabs = space.openTabs.filter(t => t.id !== tabId);
+            if (space.openTabs.length < initialLength) {
+                console.log('Tab removed from current space:', tabId);
+                await storeTabs(currentSpaceId, space.openTabs);
+                renderOpenTabs(currentSpaceId);
             }
         }
     }
+
+    // Logic for inactive spaces, only if not part of a space switch operation
+    if (!isSwitchingSpace) { // ADDED WRAPPER
+        for (const s of spaces) {
+            if (s.id !== currentSpaceId && s.openTabs) { // ADDED check for s.openTabs
+                const initialLengthInactive = s.openTabs.length;
+                s.openTabs = s.openTabs.filter(t => t.id !== tabId);
+                if (s.openTabs.length < initialLengthInactive) {
+                    console.log('Tab removed from inactive space:', s.id, tabId);
+                    await storeTabs(s.id, s.openTabs);
+                }
+            }
+        }
+    } // ADDED WRAPPER
 });
 
 // When a tab is updated (e.g., URL change)

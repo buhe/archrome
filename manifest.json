@@ -8,7 +8,9 @@
     "tabs",
     "storage",
     "favicon",
-    "sidePanel"
+    "sidePanel",
+    "scripting",
+    "activeTab"
   ],
   "action": {
     "default_title": "Open archrome sidebar",
@@ -26,5 +28,14 @@
   "icons": {
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Q",
+        "mac": "Alt+Q"
+      },
+      "description": "Toggle the archrome sidebar"
+    }
   }
 }

@@ -27,30 +27,6 @@ chrome.action.onClicked.addListener(async (tab) => {
   console.log('Browser action icon clicked. Default behavior should handle side panel toggle.');
   // With `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })` set,
   // the browser should handle opening and closing the side panel on action click.
-  // We are removing custom logic here to avoid conflicts and user gesture issues.
-
-  // try {
-  //   if (chrome.sidePanel && typeof chrome.sidePanel.getOptions === 'function' && typeof chrome.sidePanel.setOptions === 'function' && typeof chrome.sidePanel.open === 'function') {
-  //     const currentOptions = await chrome.sidePanel.getOptions({ tabId: tab.id });
-  //
-  //     if (currentOptions.enabled) {
-  //       // If the panel is currently enabled for the tab, we want to disable it (hide it).
-  //       await chrome.sidePanel.setOptions({ tabId: tab.id, enabled: false });
-  //       console.log('Side panel set to disabled for tab (toggled off).');
-  //     } else {
-  //       // If the panel is currently disabled for the tab, we want to open it.
-  //       // The open call should handle enabling it if necessary, and it's directly tied to the user gesture here.
-  //       await chrome.sidePanel.open({ windowId: tab.windowId });
-  //       console.log('Side panel open requested (toggled on).');
-  //     }
-  //   } else {
-  //     console.log('Side panel API or required functions (getOptions, setOptions, open) not available.');
-  //   }
-  // } catch (error) {
-  //   console.error('Error toggling side panel:', error);
-  //   // If an error occurs, it might be beneficial to ensure the panel is at least attempted to be opened
-  //   // or provide more specific feedback. For now, just logging.
-  // }
 });
 
 // Optional: Listen for messages from the sidebar or other parts of the extension

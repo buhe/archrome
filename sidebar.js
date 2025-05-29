@@ -137,7 +137,14 @@ function renderOpenTabs(spaceId) {
 
       const favicon = document.createElement('img');
       favicon.className = 'favicon';
-      favicon.src = tab.favIconUrl || `chrome://favicon/size/16@1x/${tab.url}`;
+      if (tab.url && tab.url.startsWith('chrome://')) {
+        // For chrome:// URLs, attempting to fetch favicons via chrome://favicon/ might be restricted
+        // or lead to errors like "Not allowed to load local resource: chrome://favicon/.../chrome://newtab/"
+        // Directly use a default icon for these.
+        favicon.src = 'icons/default_favicon.png';
+      } else {
+        favicon.src = tab.favIconUrl || `chrome://favicon/size/16@1x/${tab.url}`;
+      }
       favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; };
       li.appendChild(favicon);
 

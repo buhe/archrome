@@ -79,7 +79,7 @@ function renderBookmarks(spaceId) {
       const li = document.createElement('li');
       const favicon = document.createElement('img');
       favicon.className = 'favicon';
-      favicon.src = `chrome://favicon/size/16@1x/${bookmark.url}`;
+      favicon.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bookmark.url).hostname)}&sz=16`;
       favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; };
       li.appendChild(favicon);
 
@@ -502,7 +502,7 @@ async function renderPinnedBookmarks() {
           const li = document.createElement('li');
           const favicon = document.createElement('img');
           favicon.className = 'favicon';
-          favicon.src = `chrome://favicon/size/16@1x/${bookmark.url}`;
+          favicon.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(bookmark.url).hostname)}&sz=16`;
           favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; };
           li.appendChild(favicon);
 

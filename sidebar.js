@@ -90,6 +90,12 @@ function renderBookmarks(spaceId) {
 
       li.title = bookmark.url;
       li.addEventListener('click', (e) => {
+        // Remove any existing custom context menu when a tab is normally clicked
+        const existingMenu = document.getElementById('custom-context-menu');
+        if (existingMenu) {
+          existingMenu.remove();
+        }
+
         if (e.target.classList.contains('delete-btn')) return;
         chrome.tabs.create({ url: bookmark.url });
       });
@@ -143,6 +149,12 @@ function renderOpenTabs(spaceId) {
       li.title = tab.url;
       li.dataset.tabId = tab.id;
       li.addEventListener('click', (e) => {
+        // Remove any existing custom context menu when a tab is normally clicked
+        const existingMenu = document.getElementById('custom-context-menu');
+        if (existingMenu) {
+          existingMenu.remove();
+        }
+
         if (e.target.classList.contains('delete-btn')) return;
         chrome.tabs.update(tab.id, { active: true });
       });
@@ -168,6 +180,92 @@ function renderOpenTabs(spaceId) {
         }
       });
       li.appendChild(deleteBtn);
+      // Add context menu for moving tabs
+      li.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+
+        // Remove any existing menu first
+        const existingMenu = document.getElementById('custom-context-menu');
+        if (existingMenu) {
+          existingMenu.remove();
+        }
+
+        const contextMenu = document.createElement('div');
+        contextMenu.id = 'custom-context-menu';
+        contextMenu.className = 'custom-context-menu'; // For styling
+
+        const moveToItem = document.createElement('div');
+        moveToItem.className = 'context-menu-item';
+        moveToItem.textContent = 'Move to';
+
+        const subMenu = document.createElement('div');
+        subMenu.className = 'context-submenu';
+
+        spaces.forEach(s => {
+          if (s.id !== currentSpaceId && s.name.toLowerCase() !== 'pin') { // Don't list current space or pin folder
+            const spaceItem = document.createElement('div');
+            spaceItem.className = 'context-menu-item'; // Can reuse item style
+            spaceItem.textContent = s.name || `Space ${s.id}`;
+            spaceItem.addEventListener('click', async () => {
+              const tabIdToMove = parseInt(li.dataset.tabId, 10);
+              const tabToMove = space.openTabs.find(t => t.id === tabIdToMove);
+
+              if (tabToMove) {
+                // 1. Remove from current space
+                space.openTabs = space.openTabs.filter(t => t.id !== tabIdToMove);
+                await storeTabs(currentSpaceId, space.openTabs);
+                // No need to re-render current space's tabs yet, switchSpace will handle it
+
+                // 2. Add to target space
+                const targetSpace = spaces.find(ts => ts.id === s.id);
+                if (targetSpace) {
+                  if (!targetSpace.openTabs) targetSpace.openTabs = [];
+                  targetSpace.openTabs.push(tabToMove);
+                  await storeTabs(targetSpace.id, targetSpace.openTabs);
+                }
+
+                // 3. Switch to target space
+                switchSpace(s.id);
+              }
+              contextMenu.remove(); // Close context menu
+            });
+            subMenu.appendChild(spaceItem);
+          }
+        });
+
+        if (subMenu.children.length > 0) {
+            moveToItem.appendChild(subMenu);
+            // Show submenu on hover/click of moveToItem (can be CSS driven or JS)
+            // For simplicity, let's make it always visible if it has items
+            // Or, a simple hover effect can be added via CSS
+            moveToItem.addEventListener('mouseenter', () => subMenu.style.display = 'block');
+            moveToItem.addEventListener('mouseleave', () => subMenu.style.display = 'none');
+            // Initial state for submenu (hidden)
+            subMenu.style.display = 'none'; 
+            contextMenu.appendChild(moveToItem);
+        } else {
+            // If no other spaces to move to, perhaps disable or don't show 'Move to'
+            // For now, if no other spaces, 'Move to' won't appear if subMenu is empty
+        }
+        
+        // Only add the menu if there are items to show
+        if (contextMenu.children.length > 0) {
+            document.body.appendChild(contextMenu);
+            contextMenu.style.left = `${e.pageX}px`;
+            contextMenu.style.top = `${e.pageY}px`;
+        }
+
+        // Close menu when clicking elsewhere
+        const closeMenuHandler = (event) => {
+          if (!contextMenu.contains(event.target)) {
+            contextMenu.remove();
+            document.removeEventListener('click', closeMenuHandler);
+          }
+        };
+        // Use a timeout to ensure this listener doesn't immediately fire from the contextmenu event itself
+        setTimeout(() => document.addEventListener('click', closeMenuHandler), 0);
+      });
+
       tabsList.appendChild(li);
     });
   } else {
@@ -513,6 +611,12 @@ async function renderPinnedBookmarks() {
 
           li.title = bookmark.url;
           li.addEventListener('click', (e) => {
+        // Remove any existing custom context menu when a tab is normally clicked
+        const existingMenu = document.getElementById('custom-context-menu');
+        if (existingMenu) {
+          existingMenu.remove();
+        }
+
             if (e.target.classList.contains('delete-btn')) return;
             chrome.tabs.create({ url: bookmark.url });
           });

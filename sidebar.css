@@ -143,6 +143,52 @@ li img.favicon {
   background-color: #d0d0d0;
 }
 
+/* Custom Context Menu Styling */
+.custom-context-menu {
+  position: absolute;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.15);
+  z-index: 1000; /* Ensure it's on top */
+  min-width: 150px; /* Minimum width for the menu */
+  padding: 5px 0; /* Padding top/bottom for the menu itself */
+}
+
+.context-menu-item {
+  padding: 8px 15px;
+  cursor: pointer;
+  font-size: 0.9em;
+  position: relative; /* For submenu positioning */
+}
+
+.context-menu-item:hover {
+  background-color: #f0f0f0;
+}
+
+.context-submenu {
+  position: absolute;
+  left: 100%; /* Position to the right of the parent item */
+  top: -1px; /* Align top edge (adjust if border causes misalignment) */
+  background-color: #fff;
+  border: 1px solid #ccc;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.15);
+  z-index: 1001; /* Submenu on top of main menu */
+  min-width: 150px;
+  padding: 5px 0;
+  /* display: none; Initially hidden, shown on hover by JS/CSS */
+}
+
+/* Optional: Arrow for items with submenus */
+.context-menu-item.has-submenu::after {
+  content: '▶'; /* Or any other indicator */
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8em;
+  color: #666;
+}
+
 /* Scrollbar styling */
 .container::-webkit-scrollbar {
   width: 8px;

@@ -102,41 +102,52 @@ li img.favicon {
   margin: 15px 0;
 }
 
+/* Footer for spaces */
 .spaces-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: #e0e0e0;
-  padding: 8px 10px;
-  border-top: 1px solid #ccc;
   display: flex;
-  justify-content: center; /* Center icons if not full width */
-  overflow-x: auto; /* Horizontal scroll for many spaces */
-  white-space: nowrap; /* Keep icons in one line */
-  height: 40px; /* Fixed height for the footer */
-  box-sizing: border-box;
+  padding: 5px;
+  border-top: 1px solid #ddd;
+  /* overflow-x: auto; */ /* Removed to disable horizontal scrolling */
+  background-color: #f0f0f0;
+  align-items: center; /* Vertically align items in the center */
+  justify-content: flex-start; /* Align items to the start, new button will be at the end */
+  flex-wrap: wrap; /* Allow items to wrap to the next line */
 }
 
-.spaces-footer ul {
+#spaces-list {
   display: flex;
-  align-items: center;
-  margin: 0;
+  list-style: none;
   padding: 0;
+  margin: 0;
+  align-items: center; /* Vertically align space buttons */
+  /* flex-grow: 1; */ /* Removed as wrapping will handle layout */
+  flex-wrap: wrap; /* Allow space buttons themselves to wrap if needed */
 }
 
 .spaces-footer li {
-  padding: 5px 10px;
-  margin: 0 5px;
-  border-radius: 4px;
+  padding: 3px 6px; /* Reduced padding */
+  margin: 0 2px; /* Reduced margin */
+  border-radius: 3px;
   cursor: pointer;
-  font-size: 1.2em; /* For emoji icons */
+  font-size: 1em; /* Reduced font size for emoji icons */
   border: none; /* Remove bottom border from general li style */
+  white-space: nowrap; /* Ensure button content doesn't wrap */
 }
 
-.spaces-footer li.active-space {
-  background-color: #c0c0c0;
+.space-btn.active-space {
+  background-color: #007bff;
+  color: white;
   font-weight: bold;
+}
+
+.new-space-btn {
+  /* Inherits most styles from .space-btn */
+  /* Specific styles for the new space button if needed */
+  min-width: 25px; /* Reduced min-width */
+  font-weight: bold;
+  margin-left: 2px; /* Reduced margin */
+  padding: 3px 6px; /* Ensure padding matches other buttons */
+  font-size: 1em; /* Ensure font size matches other buttons */
 }
 
 .spaces-footer li:hover {

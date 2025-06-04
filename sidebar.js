@@ -138,12 +138,22 @@ function renderOpenTabs(spaceId) {
       const favicon = document.createElement('img');
       favicon.className = 'favicon';
       if (tab.url && tab.url.startsWith('chrome://')) {
-        // For chrome:// URLs, attempting to fetch favicons via chrome://favicon/ might be restricted
-        // or lead to errors like "Not allowed to load local resource: chrome://favicon/.../chrome://newtab/"
-        // Directly use a default icon for these.
+        // For all chrome:// URLs, directly use a default icon as chrome://favicon/ might be restricted.
         favicon.src = 'icons/default_favicon.png';
+      } else if (tab.favIconUrl) {
+        favicon.src = tab.favIconUrl;
+      } else if (tab.url) {
+        // Try Google's favicon service first for http/https URLs
+        try {
+          const hostname = new URL(tab.url).hostname;
+          favicon.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=16`;
+        } catch (e) {
+          // If URL is invalid or hostname cannot be extracted, prepare for default
+          favicon.src = ''; // Will trigger onerror
+        }
       } else {
-        favicon.src = tab.favIconUrl || `chrome://favicon/size/16@1x/${tab.url}`;
+        // No URL available, use default
+        favicon.src = 'icons/default_favicon.png';
       }
       favicon.onerror = () => { favicon.src = 'icons/default_favicon.png'; };
       li.appendChild(favicon);

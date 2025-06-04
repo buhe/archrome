@@ -11,6 +11,19 @@ body {
   box-sizing: border-box;
 }
 
+.header-section {
+  display: flex;
+  justify-content: space-between; /* Pushes items to ends */
+  align-items: center; /* Vertically centers items */
+  margin-bottom: 8px; /* Space below the header */
+}
+
+#archived-btn {
+  /* Remove absolute positioning */
+  position: static;
+  margin-left: auto; /* Push to the right */
+}
+
 .container {
   flex-grow: 1;
   overflow-y: auto; /* For scrolling if content exceeds height */
@@ -27,8 +40,8 @@ h2 {
 }
 
 .pinned-section h2 {
-  /* Optional: Slightly different styling for Pinned section title if needed */
-  /* For now, it will inherit the general h2 style */
+  margin-bottom: 0; /* Remove bottom margin to align with button */
+  border-bottom: none; /* Remove border to align with button */
 }
 
 .pinned-section ul#pinned-list {
@@ -116,13 +129,14 @@ li img.favicon {
 
 #spaces-list {
   display: flex;
+  flex-wrap: wrap;
   list-style: none;
   padding: 0;
   margin: 0;
-  align-items: center; /* Vertically align space buttons */
-  /* flex-grow: 1; */ /* Removed as wrapping will handle layout */
-  flex-wrap: wrap; /* Allow space buttons themselves to wrap if needed */
+  flex-grow: 1; /* Allow spaces-list to take up remaining space */
 }
+
+
 
 .spaces-footer li {
   padding: 3px 6px; /* Reduced padding */

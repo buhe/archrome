@@ -686,3 +686,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   await renderPinnedBookmarks(); // Load pinned items first
   await loadSpaces(); // Then load spaces and their content
 });
+
+// Handle click on the Archived button
+const archivedBtn = document.getElementById('archived-btn');
+if (archivedBtn) {
+  archivedBtn.addEventListener('click', () => {
+    // Open the archived.html page in the side panel
+    chrome.sidePanel.setOptions({
+      path: 'archived.html'
+    }).then(() => {
+      console.log('Side panel path set to archived.html');
+      // Note: The side panel should automatically update once the path is set.
+      // No need to explicitly open it again if it's already open.
+    }).catch(error => {
+      console.error('Error setting side panel path:', error);
+    });
+  });
+}
+
+console.log('Archrome sidebar script loaded with archived button handler.');

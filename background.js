@@ -48,8 +48,8 @@ function updateTabAccessTime(tabId) {
   chrome.storage.local.set({ tabLastAccessed }); // Persist for robustness
 }
 
-// Listen for tab activation
-chrome.tabs.onActivated.addListener(activeInfo => {
+// Listen for new tab
+chrome.tabs.onCreated.addListener(activeInfo => {
   updateTabAccessTime(activeInfo.tabId);
 });
 
@@ -57,17 +57,17 @@ chrome.tabs.onActivated.addListener(activeInfo => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   // Update access time if the tab is loaded and active, or if its URL changes
   // Avoid updating for minor changes like 'favIconUrl' when tab is not active
-  if (changeInfo.status === 'complete' || changeInfo.url) {
+  // if (changeInfo.status === 'complete' || changeInfo.url) {
     if (tab.active) { // Prioritize active tab updates
         updateTabAccessTime(tabId);
     }
-  }
+  // }
 });
 
 // Function to archive inactive tabs
 async function archiveInactiveTabs() {
   console.log('Checking for inactive tabs to archive...');
-  const oneDayInMilliseconds = 24 * 60 * 60 * 1000;
+  const twoDayInMilliseconds = 2 * 24 * 60 * 60 * 1000;
   const now = Date.now();
 
   // Retrieve persisted access times
@@ -91,7 +91,7 @@ async function archiveInactiveTabs() {
       const lastAccessed = currentTabAccessTimes[tab.id];
       // If a tab has no access time recorded yet, or was accessed recently, skip it.
       // New tabs will get an access time when they become active or complete loading.
-      if (!lastAccessed || (now - lastAccessed < oneDayInMilliseconds)) {
+      if (!lastAccessed || (now - lastAccessed < twoDayInMilliseconds)) {
         return;
       }
 
@@ -125,7 +125,7 @@ async function archiveInactiveTabs() {
 // Set up an alarm to run the check periodically (e.g., every hour)
 chrome.alarms.create('archiveInactiveTabsAlarm', {
   delayInMinutes: 1, // Check 1 minute after startup/install for testing
-  periodInMinutes: 60 // Then check every 60 minutes
+  periodInMinutes: 10 // Then check every 10 minutes
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {

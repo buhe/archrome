@@ -19,16 +19,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
       tabs.forEach(tab => {
         const listItem = document.createElement('li');
+
+        // Add favicon
+        const favicon = document.createElement('img');
+        favicon.className = 'favicon';
+        favicon.src = tab.favIconUrl || 'icons/default_favicon.png'; // Use a default if no favicon
+        favicon.alt = ''; // Decorative image
+        listItem.appendChild(favicon);
+
+        // Create a container for title and URL
+        const itemContentDiv = document.createElement('div');
+        itemContentDiv.className = 'item-content';
         
         const titleSpan = document.createElement('span');
         titleSpan.className = 'title';
         titleSpan.textContent = tab.title || 'No Title';
-        listItem.appendChild(titleSpan);
+        itemContentDiv.appendChild(titleSpan);
 
         const urlSpan = document.createElement('span');
         urlSpan.className = 'url';
         urlSpan.textContent = tab.url;
-        listItem.appendChild(urlSpan);
+        itemContentDiv.appendChild(urlSpan);
+
+        listItem.appendChild(itemContentDiv);
 
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'actions';

@@ -1,14 +1,22 @@
 body {
   font-family: sans-serif;
   margin: 0;
-  padding: 20px;
+  padding: 10px; /* Match sidebar.css body padding */
+  width: 350px; /* Match sidebar.css body width */
   background-color: #f4f4f9;
   color: #333;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
 }
 
 .container {
-  max-width: 800px;
-  margin: 0 auto;
+  /* max-width: 800px; */ /* Remove max-width, let body control width */
+  /* margin: 0 auto; */ /* Remove margin auto */
+  flex-grow: 1;
+  overflow-y: auto; /* For scrolling if content exceeds height */
+  padding-bottom: 10px; /* Space at the bottom */
 }
 
 #back-to-sidebar {
@@ -18,9 +26,13 @@ body {
 }
 
 h1 {
-  color: #333;
-  text-align: center;
-  margin-bottom: 20px;
+  font-size: 1.2em; /* Adjusted from sidebar.css h2 */
+  color: #555;
+  margin-top: 0;
+  margin-bottom: 10px; /* Adjusted */
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 4px;
+  text-align: left; /* Match sidebar titles */
 }
 
 #archived-tabs-list {
@@ -30,14 +42,27 @@ h1 {
 }
 
 #archived-tabs-list li {
-  background-color: #fff;
-  border: 1px solid #ddd;
-  padding: 10px 15px;
-  margin-bottom: 10px;
-  border-radius: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 8px 5px;
+  border-bottom: 1px solid #eee;
+  font-size: 0.9em;
+  cursor: pointer;
+  position: relative; /* For positioning the action buttons */
+  display: flex; /* To align icon, text, and button */
+  align-items: center; /* Vertically align items */
+  background-color: #fff; /* Keep or adjust as needed */
+  margin-bottom: 0; /* Remove original margin, rely on border-bottom */
+  border-radius: 0; /* Remove original border-radius */
+  border-left: none; /* Remove original border */
+  border-right: none; /* Remove original border */
+  border-top: none; /* Remove original border */
+}
+
+#archived-tabs-list li .item-content {
+  flex-grow: 1; /* Allow text to take available space */
+  /* white-space: nowrap; */ /* Allow wrapping for title and URL */
+  overflow: hidden;
+  /* text-overflow: ellipsis; */ /* Ellipsis might be too aggressive if URL is also shown */
+  margin-right: 5px; /* Space for the action buttons */
 }
 
 #archived-tabs-list li .title {
@@ -49,17 +74,44 @@ h1 {
 }
 
 #archived-tabs-list li .url {
-  font-size: 0.9em;
-  color: #555;
+  font-size: 0.8em; /* Slightly smaller for URL */
+  color: #777;
+  display: block; /* Make URL appear on a new line */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 300px; /* Adjust as needed */
+  /* max-width: 300px; */ /* Let flexbox handle width */
+}
+
+#archived-tabs-list li .actions {
+  /* position: absolute; */ /* If we want them like delete-btn */
+  /* right: 5px; */
+  /* top: 50%; */
+  /* transform: translateY(-50%); */
+  display: flex; /* Keep buttons in a row */
+  align-items: center;
 }
 
 #archived-tabs-list li .actions button {
-  margin-left: 5px;
-  padding: 5px 10px;
-  font-size: 0.8em;
+  padding: 3px 6px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
   cursor: pointer;
+  font-size: 0.8em;
+  line-height: 1;
+  color: #333;
+  border: 1px solid #ccc;
+  margin-left: 5px;
+}
+
+#archived-tabs-list li:hover {
+  background-color: #e9e9f3;
+}
+
+/* Favicon styling (add if favicons are displayed) */
+#archived-tabs-list li img.favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: middle;
 }

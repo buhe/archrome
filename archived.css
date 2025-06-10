@@ -73,15 +73,6 @@ h1 {
   text-overflow: ellipsis;
 }
 
-#archived-tabs-list li .url {
-  font-size: 0.8em; /* Slightly smaller for URL */
-  color: #777;
-  display: block; /* Make URL appear on a new line */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* max-width: 300px; */ /* Let flexbox handle width */
-}
 
 #archived-tabs-list li .actions {
   /* position: absolute; */ /* If we want them like delete-btn */

@@ -36,10 +36,10 @@ document.addEventListener('DOMContentLoaded', () => {
         titleSpan.textContent = tab.title || 'No Title';
         itemContentDiv.appendChild(titleSpan);
 
-        const urlSpan = document.createElement('span');
-        urlSpan.className = 'url';
-        urlSpan.textContent = tab.url;
-        itemContentDiv.appendChild(urlSpan);
+        // const urlSpan = document.createElement('span');
+        // urlSpan.className = 'url';
+        // urlSpan.textContent = tab.url;
+        // itemContentDiv.appendChild(urlSpan);
 
         listItem.appendChild(itemContentDiv);
 

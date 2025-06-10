@@ -4,7 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Function to load and display archived tabs
   function loadArchivedTabs() {
     chrome.storage.local.get(['archivedTabs'], (result) => {
-      const tabs = result.archivedTabs || [];
+      let tabs = result.archivedTabs || [];
+      // Sort tabs by archivedAt in descending order (newest first)
+      tabs.sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+
       archivedTabsList.innerHTML = ''; // Clear existing list
 
       if (tabs.length === 0) {

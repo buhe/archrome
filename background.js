@@ -67,7 +67,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Function to archive inactive tabs
 async function archiveInactiveTabs() {
   console.log('Checking for inactive tabs to archive...');
-  const twoDayInMilliseconds = 2 * 24 * 60 * 60 * 1000;
+  const twoDayInMilliseconds = 0.75 * 24 * 60 * 60 * 1000;
   const now = Date.now();
 
   // Retrieve persisted access times

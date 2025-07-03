@@ -34,6 +34,18 @@ async function initializeTabTimes() {
     console.log('Tab creation times initialized.');
 }
 
+// Function to create the alarm if it doesn't exist
+async function createAlarmIfNeeded() {
+    const alarm = await chrome.alarms.get('archiveOldTabs');
+    if (!alarm) {
+        chrome.alarms.create('archiveOldTabs', {
+            delayInMinutes: 1,
+            periodInMinutes: 1 // Note: a period of 1 minute may be delayed by the browser.
+        });
+        console.log('Archive alarm created.');
+    }
+}
+
 // When the extension is installed or upgraded
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('Extension installed or updated:', details);
@@ -50,20 +62,15 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
   }
 
-  if (details.reason === 'install') {
-    console.log('Archrome installed. User can open sidebar via toolbar icon or Alt+Q.');
-    // Set up the alarm for the first time
-    chrome.alarms.create('archiveOldTabs', {
-        delayInMinutes: 1, // Check shortly after install
-        periodInMinutes: 60 // And then every hour
-    });
-  }
+  createAlarmIfNeeded();
+  console.log('Archrome installed/updated. Alarm check complete.');
 });
 
 // Also initialize on browser startup
 chrome.runtime.onStartup.addListener(() => {
-    console.log('Browser startup, initializing tab times.');
+    console.log('Browser startup, initializing tab times and checking alarm.');
     initializeTabTimes();
+    createAlarmIfNeeded();
 });
 
 // Listen for new tab
@@ -155,16 +162,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// Initial setup of the alarm if it doesn't exist
-chrome.alarms.get('archiveOldTabs', (alarm) => {
-    if (!alarm) {
-        chrome.alarms.create('archiveOldTabs', {
-            delayInMinutes: 1,
-            periodInMinutes: 60
-        });
-        console.log('Archive alarm created.');
-    }
-});
+
 
 // Listen for clicks on the browser action icon (toolbar icon)
 chrome.action.onClicked.addListener(async (tab) => {

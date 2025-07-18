@@ -1,13 +1,12 @@
 // background.js
 
-// Store creation time for tabs
-const tabCreationTimes = {};
-
 // Function to record tab creation time
-function recordTabCreationTime(tabId) {
-  if (!tabCreationTimes[tabId]) { // Only record if it doesn't exist
-    tabCreationTimes[tabId] = Date.now();
-    chrome.storage.local.set({ tabCreationTimes }); // Persist for robustness
+async function recordTabCreationTime(tabId) {
+  const result = await chrome.storage.local.get('tabCreationTimes');
+  const storedTimes = result.tabCreationTimes || {};
+  if (!storedTimes[tabId]) { // Only record if it doesn't exist
+    storedTimes[tabId] = Date.now();
+    await chrome.storage.local.set({ tabCreationTimes: storedTimes });
   }
 }
 
@@ -30,7 +29,6 @@ async function initializeTabTimes() {
     if (needsUpdate) {
         await chrome.storage.local.set({ tabCreationTimes: storedTimes });
     }
-    Object.assign(tabCreationTimes, storedTimes);
     console.log('Tab creation times initialized.');
 }
 
@@ -42,13 +40,13 @@ async function createAlarmIfNeeded() {
             delayInMinutes: 1,
             periodInMinutes: 1 // Note: a period of 1 minute may be delayed by the browser.
         });
-        console.log('Archive alarm created.');
+        // console.log('Archive alarm created.');
     }
 }
 
 // When the extension is installed or upgraded
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('Extension installed or updated:', details);
+  // console.log('Extension installed or updated:', details);
 
   // Initialize times for all tabs
   await initializeTabTimes();
@@ -56,19 +54,19 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (chrome.sidePanel && typeof chrome.sidePanel.setPanelBehavior === 'function') {
     try {
       await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-      console.log('Side panel behavior set to open on action click.');
+      // console.log('Side panel behavior set to open on action click.');
     } catch (error) {
       console.error('Error setting side panel behavior:', error);
     }
   }
 
   createAlarmIfNeeded();
-  console.log('Archrome installed/updated. Alarm check complete.');
+  // console.log('Archrome installed/updated. Alarm check complete.');
 });
 
 // Also initialize on browser startup
 chrome.runtime.onStartup.addListener(() => {
-    console.log('Browser startup, initializing tab times and checking alarm.');
+    // console.log('Browser startup, initializing tab times and checking alarm.');
     initializeTabTimes();
     createAlarmIfNeeded();
 });
@@ -79,15 +77,13 @@ chrome.tabs.onCreated.addListener(tab => {
 });
 
 // Clean up when a tab is closed
-chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
-    delete tabCreationTimes[tabId];
-    chrome.storage.local.get('tabCreationTimes', (result) => {
-        const storedTimes = result.tabCreationTimes || {};
-        if (storedTimes[tabId]) {
-            delete storedTimes[tabId];
-            chrome.storage.local.set({ tabCreationTimes: storedTimes });
-        }
-    });
+chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+    const result = await chrome.storage.local.get('tabCreationTimes');
+    const storedTimes = result.tabCreationTimes || {};
+    if (storedTimes[tabId]) {
+        delete storedTimes[tabId];
+        await chrome.storage.local.set({ tabCreationTimes: storedTimes });
+    }
 });
 
 // Function to archive old tabs
@@ -98,7 +94,7 @@ async function archiveOldTabs() {
 
   // Retrieve persisted creation times and archived tabs
   const result = await chrome.storage.local.get(['tabCreationTimes', 'archivedTabs']);
-  const currentTabCreationTimes = result.tabCreationTimes || tabCreationTimes;
+  const currentTabCreationTimes = result.tabCreationTimes || {};
   let archivedTabs = result.archivedTabs || [];
 
   const tabs = await chrome.tabs.query({});
@@ -137,7 +133,6 @@ async function archiveOldTabs() {
       archivedTabs.unshift(...tabsToArchiveDetails);
       
       tabIdsToRemove.forEach(tabId => {
-        delete tabCreationTimes[tabId];
         delete currentTabCreationTimes[tabId];
       });
 
@@ -151,7 +146,7 @@ async function archiveOldTabs() {
       console.error('Error archiving tabs:', error);
     }
   } else {
-    console.log('No old tabs to archive.');
+    // console.log('No old tabs to archive.');
   }
 }
 
@@ -166,12 +161,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Listen for clicks on the browser action icon (toolbar icon)
 chrome.action.onClicked.addListener(async (tab) => {
-  console.log('Browser action icon clicked. Default behavior should handle side panel toggle.');
+  // console.log('Browser action icon clicked. Default behavior should handle side panel toggle.');
 });
 
 // Optional: Listen for messages from the sidebar or other parts of the extension
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Message received in background script:', request);
+  // console.log('Message received in background script:', request);
   if (request.action === "exampleAction") {
     sendResponse({ status: "success", data: "Processed in background" });
   }

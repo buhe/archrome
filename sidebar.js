@@ -537,10 +537,15 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 
 // When a tab is removed
 chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+    if (isSwitchingSpace) {
+        console.log('onRemoved: isSwitchingSpace is true, ignoring event.', tabId);
+        return; // Do nothing during a space switch
+    }
+
     // Logic for the current space (if any)
-    if (currentSpaceId) { // MODIFIED (merged !currentSpaceId check)
+    if (currentSpaceId) {
         const space = spaces.find(s => s.id === currentSpaceId);
-        if (space && space.openTabs) { // ADDED check for space.openTabs
+        if (space && space.openTabs) {
             const initialLength = space.openTabs.length;
             space.openTabs = space.openTabs.filter(t => t.id !== tabId);
             if (space.openTabs.length < initialLength) {
@@ -551,23 +556,26 @@ chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
         }
     }
 
-    // Logic for inactive spaces, only if not part of a space switch operation
-    if (!isSwitchingSpace) { // ADDED WRAPPER
-        for (const s of spaces) {
-            if (s.id !== currentSpaceId && s.openTabs) { // ADDED check for s.openTabs
-                const initialLengthInactive = s.openTabs.length;
-                s.openTabs = s.openTabs.filter(t => t.id !== tabId);
-                if (s.openTabs.length < initialLengthInactive) {
-                    console.log('Tab removed from inactive space:', s.id, tabId);
-                    await storeTabs(s.id, s.openTabs);
-                }
+    // Logic for inactive spaces
+    for (const s of spaces) {
+        if (s.id !== currentSpaceId && s.openTabs) {
+            const initialLengthInactive = s.openTabs.length;
+            s.openTabs = s.openTabs.filter(t => t.id !== tabId);
+            if (s.openTabs.length < initialLengthInactive) {
+                console.log('Tab removed from inactive space:', s.id, tabId);
+                await storeTabs(s.id, s.openTabs);
             }
         }
-    } // ADDED WRAPPER
+    }
 });
 
 // When a tab is updated (e.g., URL change)
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    if (isSwitchingSpace) {
+        console.log('onUpdated: isSwitchingSpace is true, ignoring event.', tabId);
+        return; // Do nothing during a space switch
+    }
+
     if (!currentSpaceId) return;
 
     const space = spaces.find(s => s.id === currentSpaceId);

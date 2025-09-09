@@ -1,5 +1,9 @@
 # Archrome
 
+<p align="center">
+  <img src="icons/icon128.png" width="128">
+</p>
+
 Archrome is a Chrome extension inspired by the Arc browser, designed to help you organize your browsing with spaces, pinned tabs, and a clean, sidebar-based interface.
 
 **Note:** Archrome uses your browser's bookmarks as the single source of truth for your spaces and bookmarks. This means you can seamlessly import your existing organization and manage your data from one place, maximizing the use of your existing data.

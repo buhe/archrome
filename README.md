@@ -41,7 +41,7 @@ Keep your most important links always accessible in the "Pinned" section, which 
 ### Keyboard Shortcut
 
 *   **Toggle Sidebar:** Quickly open or close the sidebar (Windows: `Alt+Q`, Mac: `Option+Q`).
-### Screenshot
+## Screenshot
 <p>
   <img src="screenshot/1.png" width="128">
 </p>

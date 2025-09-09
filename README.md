@@ -14,7 +14,7 @@ Archrome is a Chrome extension inspired by the Arc browser, designed to help you
 
 *   **Organize with Spaces:** Create distinct "spaces" to separate your work, personal projects, or any other context.
 *   **Bookmark-Powered:** Each space is powered by a bookmark folder, making it easy to manage and sync across your devices.
-*   **Custom Icons:** Use an emoji as the first character in your bookmark folder's name to set a custom icon for your space.
+*   **Custom Icons:** The UI displays the first character of a space's name. For a better visual experience, it is recommended to use an emoji as the first character of your bookmark folder's name, which will then serve as the space's icon.
 *   **Seamless Switching:** When you switch between spaces, your current tabs are saved and closed, and the tabs for the new space are automatically opened.
 
 ### Tab Management

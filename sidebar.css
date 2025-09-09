@@ -179,7 +179,7 @@ li img.favicon {
 .context-submenu {
   position: absolute;
   left: 50%; /* Position to the right of the parent item */
-  top: -1px; /* Align top edge (adjust if border causes misalignment) */
+  bottom: 0; /* Align bottom edge */
   background-color: #fff;
   border: 1px solid #ccc;
   box-shadow: 2px 2px 5px rgba(0,0,0,0.15);

@@ -40,4 +40,4 @@ Keep your most important links always accessible in the "Pinned" section, which 
 
 ### Keyboard Shortcut
 
-*   **Toggle Sidebar:** Quickly open or close the sidebar with the `Alt+Q` keyboard shortcut.
+*   **Toggle Sidebar:** Quickly open or close the sidebar (Windows: `Alt+Q`, Mac: `Option+Q`).

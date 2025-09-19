@@ -390,9 +390,11 @@ function renderSpacesFooter() {
 }
 
 async function switchSpace(newSpaceId) {
-  if (currentSpaceId === newSpaceId) return; // Already in this space
-
-  isSwitchingSpace = true; // ADDED
+  if (isSwitchingSpace || currentSpaceId === newSpaceId) {
+    console.log(`Switch already in progress or already in space ${newSpaceId}. Ignoring.`);
+    return;
+  }
+  isSwitchingSpace = true;
   try { // ADDED
     console.log(`Switching to space: ${newSpaceId}`);
     const oldSpaceId = currentSpaceId;

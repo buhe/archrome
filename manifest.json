@@ -20,7 +20,8 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "scripts": ["background.js"],
+    "persistent": true
   },
   "side_panel": {
     "default_path": "sidebar.html"

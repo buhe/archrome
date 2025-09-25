@@ -7,7 +7,6 @@
     "bookmarks",
     "tabs",
     "storage",
-    "favicon",
     "sidePanel",
     "scripting",
     "activeTab"
@@ -37,5 +36,11 @@
       },
       "description": "Toggle the archrome sidebar"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/default_favicon.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

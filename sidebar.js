@@ -391,7 +391,7 @@ function renderSpacesFooter() {
 }
 
 // 防抖包装函数
-function debounceSwitchSpace(newSpaceId, delay = 500) {
+function debounceSwitchSpace(newSpaceId, delay = 300) {
   if (switchSpaceTimeout) {
     clearTimeout(switchSpaceTimeout);
   }
@@ -411,6 +411,16 @@ async function switchSpace(newSpaceId) {
   if (isSwitchingSpace || currentSpaceId === newSpaceId) {
     console.log(`Switch already in progress or already in space ${newSpaceId}. Ignoring.`);
     return;
+  }
+
+  // Simple health check before switching
+  try {
+    await chrome.runtime.sendMessage({ action: 'ping' });
+  } catch (error) {
+    console.warn('Service worker not responding, attempting to wake up...');
+    // Simple wakeup strategy
+    await chrome.storage.local.set({ wakeup_attempt: Date.now() });
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   isSwitchingSpace = true;
@@ -941,24 +951,19 @@ window.addEventListener('unhandledrejection', (event) => {
   event.preventDefault();
 });
 
-// Initial load with enhanced error handling
+// Simple initial load
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    await renderPinnedBookmarks(); // Load pinned items first
+    await renderPinnedBookmarks();
+    await loadSpaces();
   } catch (error) {
-    console.error('Error loading pinned bookmarks:', error);
-  }
-  
-  try {
-    await loadSpaces(); // Then load spaces and their content
-  } catch (error) {
-    console.error('Error loading spaces:', error);
-    // Try to recover by loading spaces with a delay
+    console.error('Error during initial load:', error);
+    // Simple retry once
     setTimeout(async () => {
       try {
         await loadSpaces();
       } catch (retryError) {
-        console.error('Retry failed to load spaces:', retryError);
+        console.error('Load retry failed:', retryError);
       }
     }, 1000);
   }

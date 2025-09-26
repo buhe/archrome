@@ -37,31 +37,25 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
-// Keep service worker alive and responsive
-let keepAliveInterval;
-function startKeepAlive() {
-  if (keepAliveInterval) clearInterval(keepAliveInterval);
+// Simple and efficient service worker keep-alive using alarms
+chrome.alarms.create('keepAlive', {
+  delayInMinutes: 1,
+  periodInMinutes: 1
+});
 
-  keepAliveInterval = setInterval(async () => {
-    try {
-      // Simple operation to keep service worker active
-      await chrome.storage.local.get(['keep_alive']);
-    } catch (error) {
-      console.warn('Keep-alive check failed:', error);
-    }
-  }, 20000); // Check every 20 seconds
-}
-
-// Start keep-alive when extension starts
-startKeepAlive();
-
-// Clean up on extension unload
-chrome.runtime.onSuspend.addListener(() => {
-  if (keepAliveInterval) {
-    clearInterval(keepAliveInterval);
-    keepAliveInterval = null;
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'keepAlive') {
+    // Simple storage operation to keep service worker alive
+    chrome.storage.local.set({ last_keepalive: Date.now() });
   }
-  console.log('Service worker suspending...');
+});
+
+// Message listener for sidebar health checks
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'ping') {
+    sendResponse({ status: 'active', timestamp: Date.now() });
+  }
+  return true;
 });
 
 // Handle service worker errors to prevent crashes

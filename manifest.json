@@ -9,7 +9,8 @@
     "storage",
     "sidePanel",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "alarms"
   ],
   "action": {
     "default_title": "Open archrome sidebar",

@@ -1,30 +1,52 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Archrome Sidebar</title>
   <link rel="stylesheet" href="sidebar.css">
 </head>
 <body>
-  <div class="container">
-    <div class="pinned-section">
-      <h2>Pinned</h2>
-      <ul id="pinned-list"></ul>
-    </div>
-    <hr class="divider">
-    <div class="bookmarks-section">
-      <h2>Bookmarks</h2>
-      <ul id="bookmarks-list"></ul>
-    </div>
-    <hr class="divider">
-    <div class="tabs-section">
-      <h2>Open Tabs in this Space</h2>
-      <ul id="tabs-list"></ul>
-    </div>
+  <div class="app-container">
+    <main class="main-content">
+      <section class="pinned-section" aria-labelledby="pinned-heading">
+        <h2 id="pinned-heading" class="section-title">
+          <span class="icon">📌</span>
+          Pinned
+        </h2>
+        <ul id="pinned-list" class="item-list" role="list"></ul>
+      </section>
+
+      <div class="divider" role="separator"></div>
+
+      <section class="bookmarks-section" aria-labelledby="bookmarks-heading">
+        <h2 id="bookmarks-heading" class="section-title">
+          <span class="icon">📚</span>
+          Bookmarks
+        </h2>
+        <ul id="bookmarks-list" class="item-list" role="list"></ul>
+      </section>
+
+      <div class="divider" role="separator"></div>
+
+      <section class="tabs-section" aria-labelledby="tabs-heading">
+        <h2 id="tabs-heading" class="section-title">
+          <span class="icon">📑</span>
+          Open Tabs
+        </h2>
+        <ul id="tabs-list" class="item-list" role="list"></ul>
+      </section>
+    </main>
+
+    <footer class="spaces-footer" aria-labelledby="spaces-heading">
+      <h2 id="spaces-heading" class="sr-only">Spaces</h2>
+      <ul id="spaces-list" class="spaces-list" role="list"></ul>
+      <button class="new-space-btn" aria-label="Add new space">+</button>
+    </footer>
   </div>
-  <div class="spaces-footer">
-    <ul id="spaces-list"></ul>
-  </div>
+
+  <div class="custom-context-menu" role="menu" style="display: none;"></div>
+
   <script src="sidebar.js"></script>
 </body>
 </html>

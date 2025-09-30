@@ -365,30 +365,7 @@ function renderSpacesFooter() {
     spacesList.appendChild(li);
   });
 
-  // Add 'New Space' button
-  const newSpaceLi = document.createElement('li');
-  newSpaceLi.className = 'space-btn new-space-btn'; // Add a specific class for styling if needed
-  newSpaceLi.textContent = '+';
-  newSpaceLi.title = 'Create New Space';
-  newSpaceLi.addEventListener('click', async () => {
-    const newSpaceName = prompt('Enter name for the new space:');
-    if (newSpaceName && newSpaceName.trim() !== '') {
-      try {
-        // Create the new space (bookmark folder) directly under the bookmark bar (ID '1')
-        const bookmarkBarId = '1';
-        await chrome.bookmarks.create({
-          parentId: bookmarkBarId, // Create directly under the bookmark bar
-          title: newSpaceName.trim()
-        });
-        await loadSpaces(); // Reload spaces to reflect the new one and update UI
-      } catch (error) {
-        console.error('Error creating new space:', error);
-        alert('Error creating new space. Check console for details.');
-      }
-    }
-  });
-  spacesList.appendChild(newSpaceLi); // Append the 'New Space' button at the end
-}
+  }
 
 // 防抖包装函数
 function debounceSwitchSpace(newSpaceId, delay = 300) {
@@ -956,6 +933,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     await renderPinnedBookmarks();
     await loadSpaces();
+
+    // Add event listener to the green "Add Space" button
+    const newSpaceBtn = document.querySelector('.new-space-btn');
+    if (newSpaceBtn) {
+      newSpaceBtn.addEventListener('click', async () => {
+        const newSpaceName = prompt('Enter name for the new space:');
+        if (newSpaceName && newSpaceName.trim() !== '') {
+          try {
+            // Create the new space (bookmark folder) directly under the bookmark bar (ID '1')
+            const bookmarkBarId = '1';
+            await chrome.bookmarks.create({
+              parentId: bookmarkBarId, // Create directly under the bookmark bar
+              title: newSpaceName.trim()
+            });
+            await loadSpaces(); // Reload spaces to reflect the new one and update UI
+          } catch (error) {
+            console.error('Error creating new space:', error);
+            alert('Error creating new space. Check console for details.');
+          }
+        }
+      });
+    }
   } catch (error) {
     console.error('Error during initial load:', error);
     // Simple retry once

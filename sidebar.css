@@ -84,17 +84,30 @@ body {
   border: 0;
 }
 
-.pinned-section h2 {
-  /* Optional: Slightly different styling for Pinned section title if needed */
-  /* For now, it will inherit the general h2 style */
+.pinned-section .section-title {
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.375rem;
 }
 
-.pinned-section ul#pinned-list {
-  /* Optional: Specific styling for the pinned list if different from other lists */
-  /* For now, it will inherit general ul/li styles */
-  /* Example: Different background or padding */
-  /* padding-bottom: 10px; */
+.pinned-section .section-title .icon {
+  font-size: 0.875rem;
 }
+
+.pinned-section .item-list li {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.pinned-section .item-text {
+  font-size: 0.8rem;
+}
+
+.pinned-section .delete-btn {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.4rem;
+}
+
 
 .item-list {
   list-style-type: none;

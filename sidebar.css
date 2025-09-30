@@ -100,14 +100,7 @@ body {
   border-bottom: none;
 }
 
-.pinned-section .item-text {
-  font-size: 0.8rem;
-}
 
-.pinned-section .delete-btn {
-  font-size: 0.7rem;
-  padding: 0.2rem 0.4rem;
-}
 
 
 .item-list {
@@ -121,8 +114,8 @@ body {
 }
 
 .item-list li {
-  padding: 0.75rem 1rem;
-  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
   color: var(--text-primary);
   cursor: pointer;
   position: relative;
@@ -154,6 +147,7 @@ body {
   font-weight: 500;
   color: var(--text-primary);
   transition: var(--transition);
+  font-size: 0.8rem;
 }
 
 .item-list li:hover .item-text {
@@ -165,13 +159,13 @@ body {
   right: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.4rem;
   background: linear-gradient(135deg, #f56565, #e53e3e);
   color: white;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 500;
   line-height: 1;
   display: none;
@@ -215,7 +209,7 @@ li:hover .delete-btn {
 .divider {
   border: none;
   border-top: 1px solid var(--border-color);
-  margin: 1.5rem 0;
+  margin: 0.75rem 0;
   opacity: 0.5;
 }
 

@@ -361,7 +361,7 @@ li:hover .delete-btn {
   z-index: 1001;
   min-width: 180px;
   padding: 0.5rem 0;
-  margin-left: 0.5rem;
+  margin-left: 0.125rem;
   backdrop-filter: blur(10px);
   background: rgba(255, 255, 255, 0.95);
 }

@@ -37,26 +37,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   }
 });
 
-// Simple and efficient service worker keep-alive using alarms
-chrome.alarms.create('keepAlive', {
-  delayInMinutes: 1,
-  periodInMinutes: 1
-});
 
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'keepAlive') {
-    // Simple storage operation to keep service worker alive
-    chrome.storage.local.set({ last_keepalive: Date.now() });
-  }
-});
-
-// Message listener for sidebar health checks
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'ping') {
-    sendResponse({ status: 'active', timestamp: Date.now() });
-  }
-  return true;
-});
 
 // Handle service worker errors to prevent crashes
 self.addEventListener('error', (event) => {

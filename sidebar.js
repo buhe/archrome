@@ -390,16 +390,7 @@ async function switchSpace(newSpaceId) {
     return;
   }
 
-  // Simple health check before switching
-  try {
-    await chrome.runtime.sendMessage({ action: 'ping' });
-  } catch (error) {
-    console.warn('Service worker not responding, attempting to wake up...');
-    // Simple wakeup strategy
-    await chrome.storage.local.set({ wakeup_attempt: Date.now() });
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
-
+  
   isSwitchingSpace = true;
   let operationSuccess = false;
 

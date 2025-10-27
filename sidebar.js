@@ -13,8 +13,8 @@ function generateUniqueId() {
 let currentSpaceId = null;
 let spaces = []; // Array to store space objects {id, icon, name, bookmarks, openTabs}
 let isSwitchingSpace = false; // ADDED
-let switchSpaceTimeout = null; // ADDED: 用于防抖处理
-let switchSpaceStartTime = null; // ADDED: 跟踪切换开始时间
+let switchSpaceTimeout = null; // ADDED: For debounce handling
+let switchSpaceStartTime = null; // ADDED: Track switch start time
 
 const bookmarksList = document.getElementById('bookmarks-list');
 const tabsList = document.getElementById('tabs-list');
@@ -46,6 +46,11 @@ async function loadSpaces() {
             openTabs: [] // Will be populated from storage or dynamically
           };
         });
+
+// Key: Regular check and recovery of potentially stuck states
+setInterval(async () => {
+  await resetIfNeeded();
+}, 10000); // Check every 10 seconds
       console.log('Spaces loaded:', spaces);
       await loadStoredTabsForSpaces();
       renderSpacesFooter();
@@ -368,7 +373,7 @@ function renderSpacesFooter() {
 
   }
 
-// 防抖包装函数
+// Debounce wrapper function
 function debounceSwitchSpace(newSpaceId, delay = 300) {
   if (switchSpaceTimeout) {
     clearTimeout(switchSpaceTimeout);
@@ -380,7 +385,7 @@ function debounceSwitchSpace(newSpaceId, delay = 300) {
 }
 
 async function switchSpace(newSpaceId) {
-  // 关键：在每次切换前检查并恢复状态
+  // Key: Check and restore state before each switch
   await resetIfNeeded();
   
   // Clear any pending timeout
@@ -389,7 +394,7 @@ async function switchSpace(newSpaceId) {
     switchSpaceTimeout = null;
   }
 
-  // 检查是否有过期的切换状态（超过30秒认为过期）
+  // Check for expired switching state (over 30 seconds considered expired)
   if (isSwitchingSpace && switchSpaceStartTime && (Date.now() - switchSpaceStartTime) > 30000) {
     console.warn('Detected stale switching state, resetting...');
     isSwitchingSpace = false;
@@ -432,23 +437,23 @@ async function switchSpace(newSpaceId) {
         const tabsToClose = oldSpace.openTabs.filter(t => currentTabIds.has(t.id));
 
         if (tabsToClose.length > 0) {
-          // 批量关闭标签页以提高性能，减少服务工作者被终止的风险
+          // Batch close tabs to improve performance and reduce service worker termination risk
           const tabIdsToClose = tabsToClose.map(tab => tab.id);
           try {
-            // 批量关闭，最多25个标签页以避免性能问题
+            // Batch close, max 25 tabs to avoid performance issues
             const batchSize = 25;
             for (let i = 0; i < tabIdsToClose.length; i += batchSize) {
               const batch = tabIdsToClose.slice(i, i + batchSize);
               await chrome.tabs.remove(batch);
               console.log(`Closed batch of ${batch.length} tabs from old space`);
-              // 减少延迟时间
+              // Reduce delay time
               if (i + batchSize < tabIdsToClose.length) {
                 await new Promise(resolve => setTimeout(resolve, 50));
               }
             }
           } catch (e) {
             console.warn('Error closing tabs in batch:', e);
-            // 如果批量关闭失败，回退到单个关闭
+            // If batch close fails, fall back to individual close
             for (const tabId of tabIdsToClose) {
               try {
                 await chrome.tabs.remove(tabId);
@@ -469,11 +474,11 @@ async function switchSpace(newSpaceId) {
         const restoredTabs = [];
 
         if (newSpace.openTabs && newSpace.openTabs.length > 0) {
-          // 批量处理标签页恢复，减少总执行时间
-          const maxTabsPerBatch = 10; // 限制同时处理的标签页数量
-          const tabInfos = newSpace.openTabs.slice(0, 50); // 最多恢复50个标签页
+          // Batch process tab restoration to reduce total execution time
+          const maxTabsPerBatch = 10; // Limit number of tabs processed simultaneously
+          const tabInfos = newSpace.openTabs.slice(0, 50); // Restore max 50 tabs
           
-          // 使用Promise.all并行处理小批量标签页
+          // Use Promise.all to process small batches of tabs in parallel
           for (let i = 0; i < tabInfos.length; i += maxTabsPerBatch) {
             const batch = tabInfos.slice(i, i + maxTabsPerBatch);
             try {
@@ -489,7 +494,7 @@ async function switchSpace(newSpaceId) {
               
               console.log(`Processed batch of ${batch.length} tabs, restored ${batchResults.filter(r => r.status === 'fulfilled' && r.value).length} tabs`);
               
-              // 减少延迟，只在批次间添加小延迟
+              // Reduce delay, only add small delay between batches
               if (i + maxTabsPerBatch < tabInfos.length) {
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
@@ -618,20 +623,20 @@ async function createTabWithRetry(url, active, retries = 3) {
   }
 }
 
-// 关键恢复函数：当检测到状态异常时重置
+// Key recovery function: Reset when abnormal state is detected
 async function resetIfNeeded() {
   try {
     const result = await chrome.storage.local.get(['last_heartbeat', 'switchSpaceStartTime']);
     const now = Date.now();
     
-    // 如果心跳超过90秒没有更新，可能服务工作者已被终止
+    // If heartbeat hasn't updated for over 90 seconds, service worker might have been terminated
     if (result.last_heartbeat && (now - result.last_heartbeat) > 90000) {
       console.warn('Detected potential service worker termination, resetting state...');
       isSwitchingSpace = false;
       switchSpaceStartTime = null;
     }
     
-    // 如果切换状态卡住超过60秒，强制重置
+    // If switching state is stuck for over 60 seconds, force reset
     if (switchSpaceStartTime && (now - switchSpaceStartTime) > 60000) {
       console.warn('Switch space timeout detected, resetting...');
       isSwitchingSpace = false;
@@ -1025,11 +1030,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// 关键：定期清理可能卡住的切换状态，防止永久锁定
+// Key: Regular cleanup of potentially stuck switching state to prevent permanent locking
 setInterval(() => {
   if (isSwitchingSpace && switchSpaceStartTime && (Date.now() - switchSpaceStartTime) > 30000) {
     console.error('Critical: Switching state stuck for over 30 seconds, force resetting...');
     isSwitchingSpace = false;
     switchSpaceStartTime = null;
   }
-}, 5000); // 每5秒检查一次
+}, 5000); // Check every 5 seconds

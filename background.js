@@ -69,7 +69,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 console.log('Archrome background script loaded.');
 
-// 关键：服务工作者心跳机制，防止被Chrome终止
+// Key: Service worker heartbeat mechanism to prevent termination by Chrome
 let heartbeatInterval = null;
 
 function startHeartbeat() {
@@ -78,9 +78,9 @@ function startHeartbeat() {
   }
   
   heartbeatInterval = setInterval(() => {
-    // 轻量级存储操作保持服务工作者活跃
+    // Lightweight storage operation to keep service worker alive
     chrome.storage.local.set({ last_heartbeat: Date.now() });
-  }, 20000); // 每20秒一次心跳
+  }, 20000); // Heartbeat every 20 seconds
 }
 
 function stopHeartbeat() {
@@ -90,10 +90,10 @@ function stopHeartbeat() {
   }
 }
 
-// 启动心跳
+// Start heartbeat
 startHeartbeat();
 
-// 监听扩展生命周期事件
+// Listen for extension lifecycle events
 chrome.runtime.onSuspend.addListener(() => {
   console.log('Service worker is being suspended, cleaning up...');
   stopHeartbeat();

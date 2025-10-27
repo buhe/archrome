@@ -68,3 +68,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 console.log('Archrome background script loaded.');
+
+// 关键：服务工作者心跳机制，防止被Chrome终止
+let heartbeatInterval = null;
+
+function startHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+  }
+  
+  heartbeatInterval = setInterval(() => {
+    // 轻量级存储操作保持服务工作者活跃
+    chrome.storage.local.set({ last_heartbeat: Date.now() });
+  }, 20000); // 每20秒一次心跳
+}
+
+function stopHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+    heartbeatInterval = null;
+  }
+}
+
+// 启动心跳
+startHeartbeat();
+
+// 监听扩展生命周期事件
+chrome.runtime.onSuspend.addListener(() => {
+  console.log('Service worker is being suspended, cleaning up...');
+  stopHeartbeat();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  console.log('Service worker startup, restarting heartbeat...');
+  startHeartbeat();
+});

@@ -14,6 +14,7 @@ let currentSpaceId = null;
 let spaces = []; // Array to store space objects {id, icon, name, bookmarks, openTabs}
 let isSwitchingSpace = false; // ADDED
 let switchSpaceTimeout = null; // ADDED: 用于防抖处理
+let switchSpaceStartTime = null; // ADDED: 跟踪切换开始时间
 
 const bookmarksList = document.getElementById('bookmarks-list');
 const tabsList = document.getElementById('tabs-list');
@@ -379,10 +380,20 @@ function debounceSwitchSpace(newSpaceId, delay = 300) {
 }
 
 async function switchSpace(newSpaceId) {
+  // 关键：在每次切换前检查并恢复状态
+  await resetIfNeeded();
+  
   // Clear any pending timeout
   if (switchSpaceTimeout) {
     clearTimeout(switchSpaceTimeout);
     switchSpaceTimeout = null;
+  }
+
+  // 检查是否有过期的切换状态（超过30秒认为过期）
+  if (isSwitchingSpace && switchSpaceStartTime && (Date.now() - switchSpaceStartTime) > 30000) {
+    console.warn('Detected stale switching state, resetting...');
+    isSwitchingSpace = false;
+    switchSpaceStartTime = null;
   }
 
   if (isSwitchingSpace || currentSpaceId === newSpaceId) {
@@ -392,6 +403,7 @@ async function switchSpace(newSpaceId) {
 
   
   isSwitchingSpace = true;
+  switchSpaceStartTime = Date.now();
   let operationSuccess = false;
 
   try {
@@ -420,15 +432,29 @@ async function switchSpace(newSpaceId) {
         const tabsToClose = oldSpace.openTabs.filter(t => currentTabIds.has(t.id));
 
         if (tabsToClose.length > 0) {
-          // Close tabs one by one to minimize browser load
-          for (const tab of tabsToClose) {
-            try {
-              await chrome.tabs.remove(tab.id);
-              console.log('Closed tab from old space:', tab.id);
-              // Longer delay between tab operations
-              await new Promise(resolve => setTimeout(resolve, 150));
-            } catch (e) {
-              console.warn('Tab might have already been closed:', tab.id, e);
+          // 批量关闭标签页以提高性能，减少服务工作者被终止的风险
+          const tabIdsToClose = tabsToClose.map(tab => tab.id);
+          try {
+            // 批量关闭，最多25个标签页以避免性能问题
+            const batchSize = 25;
+            for (let i = 0; i < tabIdsToClose.length; i += batchSize) {
+              const batch = tabIdsToClose.slice(i, i + batchSize);
+              await chrome.tabs.remove(batch);
+              console.log(`Closed batch of ${batch.length} tabs from old space`);
+              // 减少延迟时间
+              if (i + batchSize < tabIdsToClose.length) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+            }
+          } catch (e) {
+            console.warn('Error closing tabs in batch:', e);
+            // 如果批量关闭失败，回退到单个关闭
+            for (const tabId of tabIdsToClose) {
+              try {
+                await chrome.tabs.remove(tabId);
+              } catch (individualError) {
+                console.warn(`Failed to close tab ${tabId}:`, individualError);
+              }
             }
           }
         }
@@ -443,17 +469,32 @@ async function switchSpace(newSpaceId) {
         const restoredTabs = [];
 
         if (newSpace.openTabs && newSpace.openTabs.length > 0) {
-          // Process tabs with even longer delays to avoid race conditions
-          for (const tabInfo of newSpace.openTabs) {
+          // 批量处理标签页恢复，减少总执行时间
+          const maxTabsPerBatch = 10; // 限制同时处理的标签页数量
+          const tabInfos = newSpace.openTabs.slice(0, 50); // 最多恢复50个标签页
+          
+          // 使用Promise.all并行处理小批量标签页
+          for (let i = 0; i < tabInfos.length; i += maxTabsPerBatch) {
+            const batch = tabInfos.slice(i, i + maxTabsPerBatch);
             try {
-              const tab = await restoreTabSafely(tabInfo);
-              if (tab) {
-                restoredTabs.push(tab);
+              const batchResults = await Promise.allSettled(
+                batch.map(tabInfo => restoreTabSafely(tabInfo))
+              );
+              
+              for (const result of batchResults) {
+                if (result.status === 'fulfilled' && result.value) {
+                  restoredTabs.push(result.value);
+                }
               }
-              // Increased delay between operations
-              await new Promise(resolve => setTimeout(resolve, 200));
-            } catch (e) {
-              console.warn(`Failed to restore tab ${tabInfo.url}:`, e);
+              
+              console.log(`Processed batch of ${batch.length} tabs, restored ${batchResults.filter(r => r.status === 'fulfilled' && r.value).length} tabs`);
+              
+              // 减少延迟，只在批次间添加小延迟
+              if (i + maxTabsPerBatch < tabInfos.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+            } catch (batchError) {
+              console.warn(`Error processing batch starting at ${i}:`, batchError);
             }
           }
         } else {
@@ -504,6 +545,7 @@ async function switchSpace(newSpaceId) {
     }
   } finally {
     isSwitchingSpace = false;
+    switchSpaceStartTime = null;
 
     // Final cleanup and verification
     if (operationSuccess) {
@@ -573,6 +615,30 @@ async function createTabWithRetry(url, active, retries = 3) {
       if (i === retries - 1) throw error;
       await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
     }
+  }
+}
+
+// 关键恢复函数：当检测到状态异常时重置
+async function resetIfNeeded() {
+  try {
+    const result = await chrome.storage.local.get(['last_heartbeat', 'switchSpaceStartTime']);
+    const now = Date.now();
+    
+    // 如果心跳超过90秒没有更新，可能服务工作者已被终止
+    if (result.last_heartbeat && (now - result.last_heartbeat) > 90000) {
+      console.warn('Detected potential service worker termination, resetting state...');
+      isSwitchingSpace = false;
+      switchSpaceStartTime = null;
+    }
+    
+    // 如果切换状态卡住超过60秒，强制重置
+    if (switchSpaceStartTime && (now - switchSpaceStartTime) > 60000) {
+      console.warn('Switch space timeout detected, resetting...');
+      isSwitchingSpace = false;
+      switchSpaceStartTime = null;
+    }
+  } catch (error) {
+    console.error('Error in reset check:', error);
   }
 }
 
@@ -958,3 +1024,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 1000);
   }
 });
+
+// 关键：定期清理可能卡住的切换状态，防止永久锁定
+setInterval(() => {
+  if (isSwitchingSpace && switchSpaceStartTime && (Date.now() - switchSpaceStartTime) > 30000) {
+    console.error('Critical: Switching state stuck for over 30 seconds, force resetting...');
+    isSwitchingSpace = false;
+    switchSpaceStartTime = null;
+  }
+}, 5000); // 每5秒检查一次

@@ -48,7 +48,8 @@ async function loadSpaces() {
         });
 
 // Key: Regular check and recovery of potentially stuck states
-setInterval(async () => {
+// Store interval ID for potential cleanup
+let resetCheckInterval = setInterval(async () => {
   await resetIfNeeded();
 }, 10000); // Check every 10 seconds
       console.log('Spaces loaded:', spaces);
@@ -387,7 +388,7 @@ function debounceSwitchSpace(newSpaceId, delay = 300) {
 async function switchSpace(newSpaceId) {
   // Key: Check and restore state before each switch
   await resetIfNeeded();
-  
+
   // Clear any pending timeout
   if (switchSpaceTimeout) {
     clearTimeout(switchSpaceTimeout);
@@ -406,7 +407,6 @@ async function switchSpace(newSpaceId) {
     return;
   }
 
-  
   isSwitchingSpace = true;
   switchSpaceStartTime = Date.now();
   let operationSuccess = false;
@@ -429,7 +429,7 @@ async function switchSpace(newSpaceId) {
     const newSpace = spaces.find(s => s.id === newSpaceId);
     const oldSpace = spaces.find(s => s.id === oldSpaceId);
 
-    // Step 1: Close old space tabs with smaller batches and longer delays
+    // Step 1: Close old space tabs with smaller batches to reduce memory pressure
     if (oldSpace && oldSpace.openTabs && oldSpace.openTabs.length > 0) {
       try {
         const currentTabs = await chrome.tabs.query({});
@@ -437,18 +437,18 @@ async function switchSpace(newSpaceId) {
         const tabsToClose = oldSpace.openTabs.filter(t => currentTabIds.has(t.id));
 
         if (tabsToClose.length > 0) {
-          // Batch close tabs to improve performance and reduce service worker termination risk
+          // Batch close tabs to improve performance and reduce memory pressure
           const tabIdsToClose = tabsToClose.map(tab => tab.id);
           try {
-            // Batch close, max 25 tabs to avoid performance issues
-            const batchSize = 25;
+            // Reduce batch size to reduce memory pressure
+            const batchSize = 10;
             for (let i = 0; i < tabIdsToClose.length; i += batchSize) {
               const batch = tabIdsToClose.slice(i, i + batchSize);
               await chrome.tabs.remove(batch);
               console.log(`Closed batch of ${batch.length} tabs from old space`);
-              // Reduce delay time
+              // Add small delay between batches to allow GC
               if (i + batchSize < tabIdsToClose.length) {
-                await new Promise(resolve => setTimeout(resolve, 50));
+                await new Promise(resolve => setTimeout(resolve, 100));
               }
             }
           } catch (e) {
@@ -468,35 +468,33 @@ async function switchSpace(newSpaceId) {
       }
     }
 
-    // Step 2: Restore new space tabs with enhanced safety
+    // Step 2: Restore new space tabs with memory-efficient approach
     if (newSpace) {
       try {
         const restoredTabs = [];
 
         if (newSpace.openTabs && newSpace.openTabs.length > 0) {
-          // Batch process tab restoration to reduce total execution time
-          const maxTabsPerBatch = 10; // Limit number of tabs processed simultaneously
+          // Reduce batch size and process tabs more carefully
+          const maxTabsPerBatch = 5; // Reduce batch size to reduce memory pressure
           const tabInfos = newSpace.openTabs.slice(0, 50); // Restore max 50 tabs
-          
-          // Use Promise.all to process small batches of tabs in parallel
+
+          // Process tabs in smaller batches to reduce memory pressure
           for (let i = 0; i < tabInfos.length; i += maxTabsPerBatch) {
             const batch = tabInfos.slice(i, i + maxTabsPerBatch);
             try {
-              const batchResults = await Promise.allSettled(
-                batch.map(tabInfo => restoreTabSafely(tabInfo))
-              );
-              
-              for (const result of batchResults) {
-                if (result.status === 'fulfilled' && result.value) {
-                  restoredTabs.push(result.value);
+              // Process each tab individually to reduce memory pressure
+              for (const tabInfo of batch) {
+                const result = await restoreTabSafely(tabInfo);
+                if (result) {
+                  restoredTabs.push(result);
                 }
               }
-              
-              console.log(`Processed batch of ${batch.length} tabs, restored ${batchResults.filter(r => r.status === 'fulfilled' && r.value).length} tabs`);
-              
-              // Reduce delay, only add small delay between batches
+
+              console.log(`Processed batch of ${batch.length} tabs, restored ${restoredTabs.length} tabs so far`);
+
+              // Add delay between batches to allow for garbage collection
               if (i + maxTabsPerBatch < tabInfos.length) {
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise(resolve => setTimeout(resolve, 150));
               }
             } catch (batchError) {
               console.warn(`Error processing batch starting at ${i}:`, batchError);
@@ -575,6 +573,7 @@ async function restoreTabSafely(tabInfo) {
     if (existingTab) {
       // Tab exists, just update it
       await chrome.tabs.update(tabInfo.id, { active: false });
+      // Return minimal data to reduce memory usage
       return {
         id: tabInfo.id,
         url: existingTab.url || tabInfo.url,
@@ -583,7 +582,7 @@ async function restoreTabSafely(tabInfo) {
       };
     } else {
       // Create new tab with enhanced validation
-      if (!tabInfo.url || tabInfo.url.startsWith('chrome://')) {
+      if (!tabInfo.url || tabInfo.url.startsWith('chrome://') || tabInfo.url.startsWith('about:')) {
         // Skip invalid URLs and chrome:// URLs
         console.info('Skipping invalid URL:', tabInfo.url);
         return null;
@@ -591,6 +590,7 @@ async function restoreTabSafely(tabInfo) {
 
       const newTab = await createTabWithRetry(tabInfo.url, false);
       if (newTab) {
+        // Return minimal data to reduce memory usage
         return {
           id: newTab.id,
           url: newTab.url,
@@ -611,7 +611,7 @@ async function createTabWithRetry(url, active, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
       // Validate URL before creating tab
-      if (!url || url.startsWith('chrome://')) {
+      if (!url || url.startsWith('chrome://') || url.startsWith('about:')) {
         throw new Error('Invalid URL for tab creation');
       }
       return await chrome.tabs.create({ url, active });
@@ -626,21 +626,16 @@ async function createTabWithRetry(url, active, retries = 3) {
 // Key recovery function: Reset when abnormal state is detected
 async function resetIfNeeded() {
   try {
-    const result = await chrome.storage.local.get(['last_heartbeat', 'switchSpaceStartTime']);
-    const now = Date.now();
-    
-    // If heartbeat hasn't updated for over 90 seconds, service worker might have been terminated
-    if (result.last_heartbeat && (now - result.last_heartbeat) > 90000) {
-      console.warn('Detected potential service worker termination, resetting state...');
-      isSwitchingSpace = false;
-      switchSpaceStartTime = null;
-    }
-    
-    // If switching state is stuck for over 60 seconds, force reset
-    if (switchSpaceStartTime && (now - switchSpaceStartTime) > 60000) {
-      console.warn('Switch space timeout detected, resetting...');
-      isSwitchingSpace = false;
-      switchSpaceStartTime = null;
+    // Only check heartbeat if we have a start time to compare
+    if (switchSpaceStartTime) {
+      const now = Date.now();
+
+      // If switching state is stuck for over 60 seconds, force reset
+      if ((now - switchSpaceStartTime) > 60000) {
+        console.warn('Switch space timeout detected, resetting...');
+        isSwitchingSpace = false;
+        switchSpaceStartTime = null;
+      }
     }
   } catch (error) {
     console.error('Error in reset check:', error);
@@ -651,7 +646,9 @@ async function resetIfNeeded() {
 async function storeTabs(spaceId, tabs) {
   try {
     // Clean tabs data before storing to avoid quota issues
-    const cleanTabs = tabs.map(tab => ({
+    // Limit the number of tabs stored to prevent excessive memory usage
+    const limitedTabs = tabs.slice(0, 100); // Limit to 100 tabs max
+    const cleanTabs = limitedTabs.map(tab => ({
       id: tab.id,
       url: tab.url,
       title: tab.title || 'Untitled',
@@ -728,34 +725,8 @@ async function getLastActiveSpace() {
 
 // --- Tab Event Listeners (to keep space.openTabs in sync) ---
 
-// Global queue for tab operations to prevent race conditions
-let tabOperationQueue = [];
-let isProcessingQueue = false;
-
-async function processTabQueue() {
-  if (isProcessingQueue) return;
-  isProcessingQueue = true;
-
-  try {
-    while (tabOperationQueue.length > 0) {
-      const operation = tabOperationQueue.shift();
-      try {
-        await operation();
-      } catch (error) {
-        console.error('Error processing tab operation:', error);
-      }
-      // Small delay between operations
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-  } finally {
-    isProcessingQueue = false;
-  }
-}
-
-function queueTabOperation(operation) {
-  tabOperationQueue.push(operation);
-  processTabQueue();
-}
+// Removed global queue for tab operations to reduce memory usage
+// Operations are now processed immediately to avoid accumulation
 
 // When a tab is created
 chrome.tabs.onCreated.addListener(async (tab) => {
@@ -774,26 +745,25 @@ chrome.tabs.onCreated.addListener(async (tab) => {
             return;
         }
 
-        queueTabOperation(async () => {
-            const space = spaces.find(s => s.id === currentSpaceId);
-            if (space && space.openTabs) {
-                // Check if it's a tab we just opened for this space, or a genuinely new one
-                if (!space.openTabs.find(t => t.id === tab.id)) {
-                    console.log('Tab created (user action) and added to current space:', tab);
-                    const newTabInfo = { id: tab.id, url: initialUrl, title: tab.title, favIconUrl: tab.favIconUrl };
-                    space.openTabs.push(newTabInfo);
+        // Process immediately without queuing to reduce memory overhead
+        const space = spaces.find(s => s.id === currentSpaceId);
+        if (space && space.openTabs) {
+            // Check if it's a tab we just opened for this space, or a genuinely new one
+            if (!space.openTabs.find(t => t.id === tab.id)) {
+                console.log('Tab created (user action) and added to current space:', tab);
+                const newTabInfo = { id: tab.id, url: initialUrl, title: tab.title, favIconUrl: tab.favIconUrl };
+                space.openTabs.push(newTabInfo);
 
-                    try {
-                        await storeTabs(currentSpaceId, space.openTabs);
-                        renderOpenTabs(currentSpaceId);
-                    } catch (storageError) {
-                        console.error('Storage operation failed in onCreated:', storageError);
-                    }
-                } else {
-                    console.log('onCreated: Tab already tracked or URL matched, potentially updated by onUpdated later if URL changes from pending.', tab.id);
+                try {
+                    await storeTabs(currentSpaceId, space.openTabs);
+                    renderOpenTabs(currentSpaceId);
+                } catch (storageError) {
+                    console.error('Storage operation failed in onCreated:', storageError);
                 }
+            } else {
+                console.log('onCreated: Tab already tracked or URL matched, potentially updated by onUpdated later if URL changes from pending.', tab.id);
             }
-        });
+        }
     } catch (error) {
         console.error('Error in onCreated listener:', error);
     }
@@ -807,45 +777,40 @@ chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
             return; // Do nothing during a space switch
         }
 
-        queueTabOperation(async () => {
-            // Logic for the current space (if any)
-            if (currentSpaceId) {
-                const space = spaces.find(s => s.id === currentSpaceId);
-                if (space && space.openTabs) {
-                    const initialLength = space.openTabs.length;
-                    space.openTabs = space.openTabs.filter(t => t.id !== tabId);
-                    if (space.openTabs.length < initialLength) {
-                        console.log('Tab removed from current space:', tabId);
-                        try {
-                            await storeTabs(currentSpaceId, space.openTabs);
-                            renderOpenTabs(currentSpaceId);
-                        } catch (storageError) {
-                            console.error('Storage operation failed in onRemoved (current space):', storageError);
-                        }
+        // Logic for the current space (if any)
+        if (currentSpaceId) {
+            const space = spaces.find(s => s.id === currentSpaceId);
+            if (space && space.openTabs) {
+                const initialLength = space.openTabs.length;
+                space.openTabs = space.openTabs.filter(t => t.id !== tabId);
+                if (space.openTabs.length < initialLength) {
+                    console.log('Tab removed from current space:', tabId);
+                    try {
+                        await storeTabs(currentSpaceId, space.openTabs);
+                        renderOpenTabs(currentSpaceId);
+                    } catch (storageError) {
+                        console.error('Storage operation failed in onRemoved (current space):', storageError);
                     }
                 }
             }
+        }
 
-            // Logic for inactive spaces - process with error handling
-            const storagePromises = [];
-            for (const s of spaces) {
-                if (s.id !== currentSpaceId && s.openTabs) {
-                    const initialLengthInactive = s.openTabs.length;
-                    s.openTabs = s.openTabs.filter(t => t.id !== tabId);
-                    if (s.openTabs.length < initialLengthInactive) {
-                        console.log('Tab removed from inactive space:', s.id, tabId);
-                        storagePromises.push(
-                            storeTabs(s.id, s.openTabs).catch(error => {
-                                console.error(`Storage operation failed for space ${s.id} in onRemoved:`, error);
-                            })
-                        );
+        // Logic for inactive spaces - process with error handling
+        // Process each space individually to avoid memory buildup
+        for (const s of spaces) {
+            if (s.id !== currentSpaceId && s.openTabs) {
+                const initialLengthInactive = s.openTabs.length;
+                s.openTabs = s.openTabs.filter(t => t.id !== tabId);
+                if (s.openTabs.length < initialLengthInactive) {
+                    console.log('Tab removed from inactive space:', s.id, tabId);
+                    try {
+                        await storeTabs(s.id, s.openTabs);
+                    } catch (error) {
+                        console.error(`Storage operation failed for space ${s.id} in onRemoved:`, error);
                     }
                 }
             }
-
-            // Wait for all storage operations to complete
-            await Promise.all(storagePromises);
-        });
+        }
     } catch (error) {
         console.error('Error in onRemoved listener:', error);
     }
@@ -861,64 +826,62 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
         if (!currentSpaceId) return;
 
-        queueTabOperation(async () => {
-            const space = spaces.find(s => s.id === currentSpaceId);
-            if (!space) return;
+        const space = spaces.find(s => s.id === currentSpaceId);
+        if (!space) return;
 
-            let tabDataChanged = false;
-            const tabIndex = space.openTabs.findIndex(t => t.id === tabId);
+        let tabDataChanged = false;
+        const tabIndex = space.openTabs.findIndex(t => t.id === tabId);
 
-            if (tabIndex !== -1) {
-                // Tab exists, update its info if relevant properties changed
-                const currentTabData = space.openTabs[tabIndex];
-                let updated = false;
+        if (tabIndex !== -1) {
+            // Tab exists, update its info if relevant properties changed
+            const currentTabData = space.openTabs[tabIndex];
+            let updated = false;
 
-                // Check for specific changes and update currentTabData
-                if (changeInfo.url && currentTabData.url !== tab.url) {
-                    currentTabData.url = tab.url;
+            // Check for specific changes and update currentTabData
+            if (changeInfo.url && currentTabData.url !== tab.url) {
+                currentTabData.url = tab.url;
+                updated = true;
+            }
+            if (changeInfo.title && currentTabData.title !== tab.title) {
+                currentTabData.title = tab.title;
+                updated = true;
+            }
+            if (changeInfo.favIconUrl && currentTabData.favIconUrl !== tab.favIconUrl) {
+                currentTabData.favIconUrl = tab.favIconUrl;
+                updated = true;
+            }
+
+            // If status is complete, ensure all data is fresh from the 'tab' object.
+            if (changeInfo.status === 'complete') {
+                if (currentTabData.url !== tab.url ||
+                    currentTabData.title !== tab.title ||
+                    currentTabData.favIconUrl !== tab.favIconUrl ||
+                    currentTabData.id !== tab.id) {
+                    space.openTabs[tabIndex] = { id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl };
                     updated = true;
                 }
-                if (changeInfo.title && currentTabData.title !== tab.title) {
-                    currentTabData.title = tab.title;
-                    updated = true;
-                }
-                if (changeInfo.favIconUrl && currentTabData.favIconUrl !== tab.favIconUrl) {
-                    currentTabData.favIconUrl = tab.favIconUrl;
-                    updated = true;
-                }
+            }
 
-                // If status is complete, ensure all data is fresh from the 'tab' object.
-                if (changeInfo.status === 'complete') {
-                    if (currentTabData.url !== tab.url ||
-                        currentTabData.title !== tab.title ||
-                        currentTabData.favIconUrl !== tab.favIconUrl ||
-                        currentTabData.id !== tab.id) {
-                        space.openTabs[tabIndex] = { id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl };
-                        updated = true;
-                    }
-                }
-
-                if (updated) {
-                    tabDataChanged = true;
-                }
-
-            } else if (changeInfo.status === 'complete' && tab.url && !tab.url.startsWith('chrome://')) {
-                // Tab is new to this space and has completed loading with a valid URL.
-                space.openTabs.push({ id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
-                console.log('Tab completed and added to current space:', tab);
+            if (updated) {
                 tabDataChanged = true;
             }
 
-            if (tabDataChanged) {
-                console.log('Tab data changed, storing and re-rendering:', tabId, changeInfo, tab);
-                try {
-                    await storeTabs(currentSpaceId, space.openTabs);
-                    renderOpenTabs(currentSpaceId);
-                } catch (storageError) {
-                    console.error('Storage operation failed in onUpdated:', storageError);
-                }
+        } else if (changeInfo.status === 'complete' && tab.url && !tab.url.startsWith('chrome://')) {
+            // Tab is new to this space and has completed loading with a valid URL.
+            space.openTabs.push({ id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
+            console.log('Tab completed and added to current space:', tab);
+            tabDataChanged = true;
+        }
+
+        if (tabDataChanged) {
+            console.log('Tab data changed, storing and re-rendering:', tabId, changeInfo, tab);
+            try {
+                await storeTabs(currentSpaceId, space.openTabs);
+                renderOpenTabs(currentSpaceId);
+            } catch (storageError) {
+                console.error('Storage operation failed in onUpdated:', storageError);
             }
-        });
+        }
     } catch (error) {
         console.error('Error in onUpdated listener:', error);
     }
@@ -1031,10 +994,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // Key: Regular cleanup of potentially stuck switching state to prevent permanent locking
-setInterval(() => {
+let cleanupCheckInterval = setInterval(() => {
   if (isSwitchingSpace && switchSpaceStartTime && (Date.now() - switchSpaceStartTime) > 30000) {
     console.error('Critical: Switching state stuck for over 30 seconds, force resetting...');
     isSwitchingSpace = false;
     switchSpaceStartTime = null;
   }
 }, 5000); // Check every 5 seconds
+
+// Cleanup function to clear intervals when sidebar is unloaded
+window.addEventListener('beforeunload', () => {
+  if (resetCheckInterval) {
+    clearInterval(resetCheckInterval);
+    resetCheckInterval = null;
+  }
+  if (cleanupCheckInterval) {
+    clearInterval(cleanupCheckInterval);
+    cleanupCheckInterval = null;
+  }
+});

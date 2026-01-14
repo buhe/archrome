@@ -76,11 +76,24 @@ function startHeartbeat() {
   if (heartbeatInterval) {
     clearInterval(heartbeatInterval);
   }
-  
+
   heartbeatInterval = setInterval(() => {
     // Lightweight storage operation to keep service worker alive
-    chrome.storage.local.set({ last_heartbeat: Date.now() });
-  }, 20000); // Heartbeat every 20 seconds
+    // Only update if the value has changed significantly to reduce storage writes
+    const now = Date.now();
+    chrome.storage.local.get(['last_heartbeat']).then((result) => {
+      // Only update if it's been more than 30 seconds since last update
+      if (!result.last_heartbeat || (now - result.last_heartbeat) > 30000) {
+        chrome.storage.local.set({ last_heartbeat: now });
+      }
+    }).catch(error => {
+      console.warn('Error getting heartbeat for comparison:', error);
+      // Fallback to always setting if get fails
+      chrome.storage.local.set({ last_heartbeat: now }).catch(setError => {
+        console.error('Error setting heartbeat:', setError);
+      });
+    });
+  }, 30000); // Check every 30 seconds, but only update if needed
 }
 
 function stopHeartbeat() {

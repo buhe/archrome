@@ -93,7 +93,7 @@ function startHeartbeat() {
         // console.error('Error setting heartbeat:', setError);
       });
     });
-  }, 30000); // Check every 30 seconds, but only update if needed
+  }, 60000); // Increased interval to 60 seconds to reduce frequency
 }
 
 function stopHeartbeat() {

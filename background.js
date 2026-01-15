@@ -2,7 +2,7 @@
 
 // When the extension is installed or upgraded
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('Extension installed or updated:', details);
+  // console.log('Extension installed or updated:', details);
 
   // Ensure the side panel opens on action click by default.
   // This is often the default behavior if a side_panel is defined in manifest.json,
@@ -14,10 +14,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         for (let i = 0; i < retries; i++) {
           try {
             await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-            console.log('Side panel behavior set to open on action click.');
+            // console.log('Side panel behavior set to open on action click.');
             return true;
           } catch (error) {
-            console.warn(`Attempt ${i + 1} failed:`, error);
+            // console.warn(`Attempt ${i + 1} failed:`, error);
             if (i === retries - 1) throw error;
             await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
           }
@@ -26,14 +26,14 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
       await setPanelBehaviorWithRetry();
     } catch (error) {
-      console.error('Error setting side panel behavior after retries:', error);
+      // console.error('Error setting side panel behavior after retries:', error);
       // Continue execution even if this fails
     }
   }
 
   // Perform any first-time setup or migration tasks here
   if (details.reason === 'install') {
-    console.log('Archrome installed. User can open sidebar via toolbar icon or Alt+Q.');
+    // console.log('Archrome installed. User can open sidebar via toolbar icon or Alt+Q.');
   }
 });
 
@@ -41,25 +41,25 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 // Handle service worker errors to prevent crashes
 self.addEventListener('error', (event) => {
-  console.error('Service worker error:', event.error);
+  // console.error('Service worker error:', event.error);
   event.preventDefault();
 });
 
 self.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason);
+  // console.error('Unhandled promise rejection:', event.reason);
   event.preventDefault();
 });
 
 // Listen for clicks on the browser action icon (toolbar icon)
 chrome.action.onClicked.addListener(async (tab) => {
-  console.log('Browser action icon clicked. Default behavior should handle side panel toggle.');
+  // console.log('Browser action icon clicked. Default behavior should handle side panel toggle.');
   // With `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })` set,
   // the browser should handle opening and closing the side panel on action click.
 });
 
 // Optional: Listen for messages from the sidebar or other parts of the extension
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Message received in background script:', request);
+  // console.log('Message received in background script:', request);
   if (request.action === "exampleAction") {
     // Process the action
     sendResponse({ status: "success", data: "Processed in background" });
@@ -67,7 +67,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true; // Indicates that the response will be sent asynchronously
 });
 
-console.log('Archrome background script loaded.');
+// console.log('Archrome background script loaded.');
 
 // Key: Service worker heartbeat mechanism to prevent termination by Chrome
 let heartbeatInterval = null;
@@ -87,10 +87,10 @@ function startHeartbeat() {
         chrome.storage.local.set({ last_heartbeat: now });
       }
     }).catch(error => {
-      console.warn('Error getting heartbeat for comparison:', error);
+      // console.warn('Error getting heartbeat for comparison:', error);
       // Fallback to always setting if get fails
       chrome.storage.local.set({ last_heartbeat: now }).catch(setError => {
-        console.error('Error setting heartbeat:', setError);
+        // console.error('Error setting heartbeat:', setError);
       });
     });
   }, 30000); // Check every 30 seconds, but only update if needed
@@ -108,11 +108,11 @@ startHeartbeat();
 
 // Listen for extension lifecycle events
 chrome.runtime.onSuspend.addListener(() => {
-  console.log('Service worker is being suspended, cleaning up...');
+  // console.log('Service worker is being suspended, cleaning up...');
   stopHeartbeat();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  console.log('Service worker startup, restarting heartbeat...');
+  // console.log('Service worker startup, restarting heartbeat...');
   startHeartbeat();
 });

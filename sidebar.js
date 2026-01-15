@@ -23,7 +23,7 @@ const pinnedList = document.getElementById('pinned-list'); // Added for pinned b
 
 // --- Bookmarks and Spaces Logic ---
 async function loadSpaces() {
-  console.log('Loading spaces...');
+  // // console.log('Loading spaces...');
   try {
     const bookmarkTree = await chrome.bookmarks.getTree();
     const bookmarkBar = bookmarkTree[0].children.find(node => node.id === '1'); // '1' is usually the ID for Bookmarks Bar
@@ -52,7 +52,7 @@ async function loadSpaces() {
 let resetCheckInterval = setInterval(async () => {
   await resetIfNeeded();
 }, 10000); // Check every 10 seconds
-      console.log('Spaces loaded:', spaces);
+      // // console.log('Spaces loaded:', spaces);
       await loadStoredTabsForSpaces();
       renderSpacesFooter();
       // Load the first space by default or last active space
@@ -63,11 +63,11 @@ let resetCheckInterval = setInterval(async () => {
         switchSpace(spaces[0].id);
       }
     } else {
-      console.log('No bookmark bar found or no children in bookmark bar.');
+      // // console.log('No bookmark bar found or no children in bookmark bar.');
       bookmarksList.innerHTML = '<li>No bookmark folders found.</li>';
     }
   } catch (error) {
-    console.error('Error loading spaces:', error);
+    // // console.error('Error loading spaces:', error);
     bookmarksList.innerHTML = '<li>Error loading bookmarks.</li>';
   }
 }
@@ -118,9 +118,9 @@ function renderBookmarks(spaceId) {
           await chrome.bookmarks.remove(bookmark.id);
           space.bookmarks = space.bookmarks.filter(bm => bm.id !== bookmark.id);
           renderBookmarks(spaceId);
-          console.log('Bookmark deleted:', bookmark.title);
+          // // console.log('Bookmark deleted:', bookmark.title);
         } catch (error) {
-          console.error('Error deleting bookmark:', error);
+          // // console.error('Error deleting bookmark:', error);
         }
       });
       li.appendChild(deleteBtn);
@@ -191,10 +191,10 @@ function renderOpenTabs(spaceId) {
       deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation(); // Prevent li click event
         try {
-          await chrome.tabs.remove(tab.id);
-          console.log('Tab close initiated via X button:', tab.id);
+          await chrome.tabs.remove(tab.id)// ;
+          // console.log('Tab close initiated via X button:', tab.id);
         } catch (error) {
-          console.error('Error closing tab via X button:', error);
+          // console.error('Error closing tab via X button:', error);
           // Fallback UI update if onRemoved listener fails or is delayed
           const space = spaces.find(s => s.id === currentSpaceId);
           if (space) {
@@ -324,26 +324,26 @@ bookmarksList.addEventListener('drop', async (event) => {
       if (updatedBookmarkTree && updatedBookmarkTree[0] && updatedBookmarkTree[0].children) {
           space.bookmarks = updatedBookmarkTree[0].children.filter(bm => bm.url);
       }
-      renderBookmarks(currentSpaceId);
-      console.log('Tab dropped and bookmark created:', tabData.title);
+      renderBookmarks(currentSpaceId)// ;
+      // console.log('Tab dropped and bookmark created:', tabData.title);
 
       // Remove the tab from openTabs and close it
       const tabIdToRemove = tabData.id;
       space.openTabs = space.openTabs.filter(t => t.id !== tabIdToRemove);
       try {
-        await chrome.tabs.remove(tabIdToRemove);
-        console.log('Original tab closed:', tabIdToRemove);
+        await chrome.tabs.remove(tabIdToRemove)// ;
+        // console.log('Original tab closed:', tabIdToRemove);
       } catch (e) {
-        console.warn('Could not close tab, it might have been closed already:', tabIdToRemove, e);
+        // console.warn('Could not close tab, it might have been closed already:', tabIdToRemove, e);
       }
       await storeTabs(currentSpaceId, space.openTabs);
       renderOpenTabs(currentSpaceId);
 
     } else {
-      console.warn('Dropped data does not contain valid ID, URL and title.');
+      // console.warn('Dropped data does not contain valid ID, URL and title.');
     }
   } catch (error) {
-    console.error('Error processing dropped tab:', error);
+    // console.error('Error processing dropped tab:', error);
   }
 });
 
@@ -397,13 +397,13 @@ async function switchSpace(newSpaceId) {
 
   // Check for expired switching state (over 30 seconds considered expired)
   if (isSwitchingSpace && switchSpaceStartTime && (Date.now() - switchSpaceStartTime) > 30000) {
-    console.warn('Detected stale switching state, resetting...');
+    // console.warn('Detected stale switching state, resetting...');
     isSwitchingSpace = false;
     switchSpaceStartTime = null;
   }
 
   if (isSwitchingSpace || currentSpaceId === newSpaceId) {
-    console.log(`Switch already in progress or already in space ${newSpaceId}. Ignoring.`);
+    // console.log(`Switch already in progress or already in space ${newSpaceId}. Ignoring.`);
     return;
   }
 
@@ -412,7 +412,7 @@ async function switchSpace(newSpaceId) {
   let operationSuccess = false;
 
   try {
-    console.log(`Switching to space: ${newSpaceId}`);
+    // console.log(`Switching to space: ${newSpaceId}`);
     const oldSpaceId = currentSpaceId;
     currentSpaceId = newSpaceId;
 
@@ -421,7 +421,7 @@ async function switchSpace(newSpaceId) {
       renderSpacesFooter();
       renderBookmarks(newSpaceId);
     } catch (e) {
-      console.error('Error rendering UI:', e);
+      // console.error('Error rendering UI:', e);
       // Continue even if UI fails
     }
 
@@ -444,27 +444,27 @@ async function switchSpace(newSpaceId) {
             const batchSize = 10;
             for (let i = 0; i < tabIdsToClose.length; i += batchSize) {
               const batch = tabIdsToClose.slice(i, i + batchSize);
-              await chrome.tabs.remove(batch);
-              console.log(`Closed batch of ${batch.length} tabs from old space`);
+              await chrome.tabs.remove(batch)// ;
+              // console.log(`Closed batch of ${batch.length} tabs from old space`);
               // Add small delay between batches to allow GC
               if (i + batchSize < tabIdsToClose.length) {
                 await new Promise(resolve => setTimeout(resolve, 100));
               }
             }
           } catch (e) {
-            console.warn('Error closing tabs in batch:', e);
+            // console.warn('Error closing tabs in batch:', e);
             // If batch close fails, fall back to individual close
             for (const tabId of tabIdsToClose) {
               try {
                 await chrome.tabs.remove(tabId);
               } catch (individualError) {
-                console.warn(`Failed to close tab ${tabId}:`, individualError);
+                // console.warn(`Failed to close tab ${tabId}:`, individualError);
               }
             }
           }
         }
       } catch (e) {
-        console.warn('Error closing tabs from old space:', e);
+        // console.warn('Error closing tabs from old space:', e);
       }
     }
 
@@ -490,14 +490,14 @@ async function switchSpace(newSpaceId) {
                 }
               }
 
-              console.log(`Processed batch of ${batch.length} tabs, restored ${restoredTabs.length} tabs so far`);
+              // console.log(`Processed batch of ${batch.length} tabs, restored ${restoredTabs.length} tabs so far`);
 
               // Add delay between batches to allow for garbage collection
               if (i + maxTabsPerBatch < tabInfos.length) {
                 await new Promise(resolve => setTimeout(resolve, 150));
               }
             } catch (batchError) {
-              console.warn(`Error processing batch starting at ${i}:`, batchError);
+              // console.warn(`Error processing batch starting at ${i}:`, batchError);
             }
           }
         } else {
@@ -516,7 +516,7 @@ async function switchSpace(newSpaceId) {
           try {
             await chrome.tabs.update(restoredTabs[0].id, { active: true });
           } catch (e) {
-            console.error('Error activating first tab:', e);
+            // console.error('Error activating first tab:', e);
           }
         }
 
@@ -525,7 +525,7 @@ async function switchSpace(newSpaceId) {
         renderOpenTabs(newSpace.id);
 
       } catch (e) {
-        console.error('Error during tab restoration:', e);
+        // console.error('Error during tab restoration:', e);
         throw e; // Re-throw to mark operation as failed
       }
     }
@@ -536,15 +536,15 @@ async function switchSpace(newSpaceId) {
     try {
       await setLastActiveSpace(newSpaceId);
     } catch (e) {
-      console.error('Error setting last active space:', e);
+      // console.error('Error setting last active space:', e);
     }
 
   } catch (error) {
-    console.error('Critical error in switchSpace:', error);
+    // console.error('Critical error in switchSpace:', error);
     // Attempt to restore previous state on failure
     if (oldSpaceId && currentSpaceId === newSpaceId) {
-      currentSpaceId = oldSpaceId;
-      console.log('Restored previous space ID due to error');
+      currentSpaceId = oldSpaceId// ;
+      // console.log('Restored previous space ID due to error');
     }
   } finally {
     isSwitchingSpace = false;
@@ -552,9 +552,9 @@ async function switchSpace(newSpaceId) {
 
     // Final cleanup and verification
     if (operationSuccess) {
-      console.log(`Successfully switched to space: ${newSpaceId}`);
+      // console.log(`Successfully switched to space: ${newSpaceId}`);
     } else {
-      console.warn(`Space switch to ${newSpaceId} encountered issues`);
+      // console.warn(`Space switch to ${newSpaceId} encountered issues`);
     }
   }
 }
@@ -584,7 +584,7 @@ async function restoreTabSafely(tabInfo) {
       // Create new tab with enhanced validation
       if (!tabInfo.url || tabInfo.url.startsWith('chrome://') || tabInfo.url.startsWith('about:')) {
         // Skip invalid URLs and chrome:// URLs
-        console.info('Skipping invalid URL:', tabInfo.url);
+        // console.info('Skipping invalid URL:', tabInfo.url);
         return null;
       }
 
@@ -601,7 +601,7 @@ async function restoreTabSafely(tabInfo) {
     }
     return null;
   } catch (error) {
-    console.error('Error in restoreTabSafely:', error);
+    // console.error('Error in restoreTabSafely:', error);
     return null;
   }
 }
@@ -616,7 +616,7 @@ async function createTabWithRetry(url, active, retries = 3) {
       }
       return await chrome.tabs.create({ url, active });
     } catch (error) {
-      console.warn(`Tab creation attempt ${i + 1} failed:`, error);
+      // console.warn(`Tab creation attempt ${i + 1} failed:`, error);
       if (i === retries - 1) throw error;
       await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
     }
@@ -632,13 +632,13 @@ async function resetIfNeeded() {
 
       // If switching state is stuck for over 60 seconds, force reset
       if ((now - switchSpaceStartTime) > 60000) {
-        console.warn('Switch space timeout detected, resetting...');
+        // console.warn('Switch space timeout detected, resetting...');
         isSwitchingSpace = false;
         switchSpaceStartTime = null;
       }
     }
   } catch (error) {
-    console.error('Error in reset check:', error);
+    // console.error('Error in reset check:', error);
   }
 }
 
@@ -663,7 +663,7 @@ async function storeTabs(spaceId, tabs) {
           if (chrome.storage.local.QUOTA_BYTES_PER_ITEM) {
             const dataSize = new Blob([JSON.stringify(cleanTabs)]).size;
             if (dataSize > chrome.storage.local.QUOTA_BYTES_PER_ITEM) {
-              console.warn(`Data size ${dataSize} exceeds quota, reducing data`);
+              // console.warn(`Data size ${dataSize} exceeds quota, reducing data`);
               // Store minimal data if quota is exceeded
               const minimalTabs = cleanTabs.map(tab => ({
                 id: tab.id,
@@ -676,10 +676,10 @@ async function storeTabs(spaceId, tabs) {
           } else {
             await chrome.storage.local.set({ [`space_${spaceId}_tabs`]: cleanTabs });
           }
-          console.log(`Tabs stored for space ${spaceId}:`, cleanTabs.length);
+          // console.log(`Tabs stored for space ${spaceId}:`, cleanTabs.length);
           return true;
         } catch (error) {
-          console.warn(`Storage attempt ${i + 1} failed:`, error);
+          // console.warn(`Storage attempt ${i + 1} failed:`, error);
           if (i === retries - 1) throw error;
           await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
         }
@@ -688,7 +688,7 @@ async function storeTabs(spaceId, tabs) {
 
     await storeWithRetry();
   } catch (error) {
-    console.error(`Error storing tabs for space ${spaceId} after retries:`, error);
+    // console.error(`Error storing tabs for space ${spaceId} after retries:`, error);
     // Continue execution even if storage fails
   }
 }
@@ -696,11 +696,11 @@ async function storeTabs(spaceId, tabs) {
 async function getStoredTabs(spaceId) {
   try {
     const result = await chrome.storage.local.get([`space_${spaceId}_tabs`]);
-    const tabs = result[`space_${spaceId}_tabs`] || [];
-    console.log(`Tabs retrieved for space ${spaceId}:`, tabs.length);
+    const tabs = result[`space_${spaceId}_tabs`] || []// ;
+    // console.log(`Tabs retrieved for space ${spaceId}:`, tabs.length);
     return tabs;
   } catch (error) {
-    console.error(`Error getting stored tabs for space ${spaceId}:`, error);
+    // console.error(`Error getting stored tabs for space ${spaceId}:`, error);
     return [];
   }
 }
@@ -709,7 +709,7 @@ async function setLastActiveSpace(spaceId) {
     try {
         await chrome.storage.local.set({ 'last_active_space_id': spaceId });
     } catch (error) {
-        console.error('Error setting last active space:', error);
+        // console.error('Error setting last active space:', error);
     }
 }
 
@@ -718,7 +718,7 @@ async function getLastActiveSpace() {
         const result = await chrome.storage.local.get(['last_active_space_id']);
         return result.last_active_space_id;
     } catch (error) {
-        console.error('Error getting last active space:', error);
+        // console.error('Error getting last active space:', error);
         return null;
     }
 }
@@ -732,7 +732,7 @@ async function getLastActiveSpace() {
 chrome.tabs.onCreated.addListener(async (tab) => {
     try {
         if (isSwitchingSpace) {
-            console.log('onCreated: isSwitchingSpace is true, switchSpace will handle this tab if necessary.', tab.id);
+            // console.log('onCreated: isSwitchingSpace is true, switchSpace will handle this tab if necessary.', tab.id);
             return; // Defer to switchSpace logic during space switching
         }
 
@@ -741,7 +741,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         const initialUrl = tab.url || tab.pendingUrl;
         // Avoid adding tabs with internal URLs or if the URL is not yet defined.
         if (!initialUrl || initialUrl.startsWith('chrome://') || initialUrl.startsWith('about:')) {
-            console.log('Tab created with internal or undefined URL, not adding to space via onCreated:', initialUrl);
+            // console.log('Tab created with internal or undefined URL, not adding to space via onCreated:', initialUrl);
             return;
         }
 
@@ -750,7 +750,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
         if (space && space.openTabs) {
             // Check if it's a tab we just opened for this space, or a genuinely new one
             if (!space.openTabs.find(t => t.id === tab.id)) {
-                console.log('Tab created (user action) and added to current space:', tab);
+                // console.log('Tab created (user action) and added to current space:', tab);
                 const newTabInfo = { id: tab.id, url: initialUrl, title: tab.title, favIconUrl: tab.favIconUrl };
                 space.openTabs.push(newTabInfo);
 
@@ -758,14 +758,14 @@ chrome.tabs.onCreated.addListener(async (tab) => {
                     await storeTabs(currentSpaceId, space.openTabs);
                     renderOpenTabs(currentSpaceId);
                 } catch (storageError) {
-                    console.error('Storage operation failed in onCreated:', storageError);
+                    // console.error('Storage operation failed in onCreated:', storageError);
                 }
             } else {
-                console.log('onCreated: Tab already tracked or URL matched, potentially updated by onUpdated later if URL changes from pending.', tab.id);
+                // console.log('onCreated: Tab already tracked or URL matched, potentially updated by onUpdated later if URL changes from pending.', tab.id);
             }
         }
     } catch (error) {
-        console.error('Error in onCreated listener:', error);
+        // console.error('Error in onCreated listener:', error);
     }
 });
 
@@ -773,7 +773,7 @@ chrome.tabs.onCreated.addListener(async (tab) => {
 chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
     try {
         if (isSwitchingSpace) {
-            console.log('onRemoved: isSwitchingSpace is true, ignoring event.', tabId);
+            // console.log('onRemoved: isSwitchingSpace is true, ignoring event.', tabId);
             return; // Do nothing during a space switch
         }
 
@@ -784,12 +784,12 @@ chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
                 const initialLength = space.openTabs.length;
                 space.openTabs = space.openTabs.filter(t => t.id !== tabId);
                 if (space.openTabs.length < initialLength) {
-                    console.log('Tab removed from current space:', tabId);
+                    // console.log('Tab removed from current space:', tabId);
                     try {
                         await storeTabs(currentSpaceId, space.openTabs);
                         renderOpenTabs(currentSpaceId);
                     } catch (storageError) {
-                        console.error('Storage operation failed in onRemoved (current space):', storageError);
+                        // console.error('Storage operation failed in onRemoved (current space):', storageError);
                     }
                 }
             }
@@ -802,17 +802,17 @@ chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
                 const initialLengthInactive = s.openTabs.length;
                 s.openTabs = s.openTabs.filter(t => t.id !== tabId);
                 if (s.openTabs.length < initialLengthInactive) {
-                    console.log('Tab removed from inactive space:', s.id, tabId);
+                    // console.log('Tab removed from inactive space:', s.id, tabId);
                     try {
                         await storeTabs(s.id, s.openTabs);
                     } catch (error) {
-                        console.error(`Storage operation failed for space ${s.id} in onRemoved:`, error);
+                        // console.error(`Storage operation failed for space ${s.id} in onRemoved:`, error);
                     }
                 }
             }
         }
     } catch (error) {
-        console.error('Error in onRemoved listener:', error);
+        // console.error('Error in onRemoved listener:', error);
     }
 });
 
@@ -820,7 +820,7 @@ chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     try {
         if (isSwitchingSpace) {
-            console.log('onUpdated: isSwitchingSpace is true, ignoring event.', tabId);
+            // console.log('onUpdated: isSwitchingSpace is true, ignoring event.', tabId);
             return; // Do nothing during a space switch
         }
 
@@ -868,29 +868,29 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
         } else if (changeInfo.status === 'complete' && tab.url && !tab.url.startsWith('chrome://')) {
             // Tab is new to this space and has completed loading with a valid URL.
-            space.openTabs.push({ id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl });
-            console.log('Tab completed and added to current space:', tab);
+            space.openTabs.push({ id: tab.id, url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl })// ;
+            // console.log('Tab completed and added to current space:', tab);
             tabDataChanged = true;
         }
 
         if (tabDataChanged) {
-            console.log('Tab data changed, storing and re-rendering:', tabId, changeInfo, tab);
+            // console.log('Tab data changed, storing and re-rendering:', tabId, changeInfo, tab);
             try {
                 await storeTabs(currentSpaceId, space.openTabs);
                 renderOpenTabs(currentSpaceId);
             } catch (storageError) {
-                console.error('Storage operation failed in onUpdated:', storageError);
+                // console.error('Storage operation failed in onUpdated:', storageError);
             }
         }
     } catch (error) {
-        console.error('Error in onUpdated listener:', error);
+        // console.error('Error in onUpdated listener:', error);
     }
 });
 
 
 // Function to render pinned bookmarks
 async function renderPinnedBookmarks() {
-  console.log('Rendering pinned bookmarks...');
+  // console.log('Rendering pinned bookmarks...');
   pinnedList.innerHTML = ''; // Clear previous pinned bookmarks
   try {
     const bookmarkTree = await chrome.bookmarks.getTree();
@@ -937,19 +937,19 @@ async function renderPinnedBookmarks() {
       pinnedList.innerHTML = '<li>Bookmark bar not found.</li>';
     }
   } catch (error) {
-    console.error('Error rendering pinned bookmarks:', error);
+    // console.error('Error rendering pinned bookmarks:', error);
     pinnedList.innerHTML = '<li>Error loading pinned bookmarks.</li>';
   }
 }
 
 // Global error handler for sidebar
 window.addEventListener('error', (event) => {
-  console.error('Global error in sidebar:', event.error);
+  // console.error('Global error in sidebar:', event.error);
   event.preventDefault();
 });
 
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection in sidebar:', event.reason);
+  // console.error('Unhandled promise rejection in sidebar:', event.reason);
   event.preventDefault();
 });
 
@@ -974,20 +974,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             await loadSpaces(); // Reload spaces to reflect the new one and update UI
           } catch (error) {
-            console.error('Error creating new space:', error);
+            // console.error('Error creating new space:', error);
             alert('Error creating new space. Check console for details.');
           }
         }
       });
     }
   } catch (error) {
-    console.error('Error during initial load:', error);
+    // console.error('Error during initial load:', error);
     // Simple retry once
     setTimeout(async () => {
       try {
         await loadSpaces();
       } catch (retryError) {
-        console.error('Load retry failed:', retryError);
+        // console.error('Load retry failed:', retryError);
       }
     }, 1000);
   }
@@ -996,7 +996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Key: Regular cleanup of potentially stuck switching state to prevent permanent locking
 let cleanupCheckInterval = setInterval(() => {
   if (isSwitchingSpace && switchSpaceStartTime && (Date.now() - switchSpaceStartTime) > 30000) {
-    console.error('Critical: Switching state stuck for over 30 seconds, force resetting...');
+    // console.error('Critical: Switching state stuck for over 30 seconds, force resetting...');
     isSwitchingSpace = false;
     switchSpaceStartTime = null;
   }

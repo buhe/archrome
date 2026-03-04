@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archrome Sidebar</title>
+  <link rel="stylesheet" href="./styles/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <main class="main-content">
+      <!-- Pinned Section -->
+      <section class="pinned-section" aria-labelledby="pinned-heading">
+        <h2 id="pinned-heading" class="section-title">
+          <span class="icon">📌</span>
+          Pinned
+        </h2>
+        <ul id="pinned-list" class="item-list" role="list"></ul>
+      </section>
+
+      <div class="divider" role="separator"></div>
+
+      <!-- Bookmarks Section -->
+      <section class="bookmarks-section" aria-labelledby="bookmarks-heading">
+        <h2 id="bookmarks-heading" class="section-title">
+          <span class="icon">📚</span>
+          Bookmarks
+        </h2>
+        <ul id="bookmarks-list" class="item-list" role="list"></ul>
+      </section>
+
+      <div class="divider" role="separator"></div>
+
+      <!-- Tabs Section -->
+      <section class="tabs-section" aria-labelledby="tabs-heading">
+        <h2 id="tabs-heading" class="section-title">
+          <span class="icon">📑</span>
+          Open Tabs
+        </h2>
+        <ul id="tabs-list" class="item-list" role="list"></ul>
+      </section>
+    </main>
+
+    <!-- Spaces Footer -->
+    <footer class="spaces-footer" aria-labelledby="spaces-heading">
+      <h2 id="spaces-heading" class="sr-only">Spaces</h2>
+      <ul id="spaces-list" class="spaces-list" role="list"></ul>
+      <button class="new-space-btn" aria-label="Add new space" title="Add new space">+</button>
+    </footer>
+  </div>
+
+  <!-- Context Menu Container -->
+  <div id="context-menu-container"></div>
+
+  <!-- Log Viewer Modal -->
+  <div id="log-viewer-modal" class="log-viewer-modal" style="display: none;">
+    <div class="log-viewer-content">
+      <div class="log-viewer-header">
+        <h2>Archrome Logs</h2>
+        <button id="close-log-viewer" class="close-btn" aria-label="Close log viewer">&times;</button>
+      </div>
+      <div class="log-viewer-controls">
+        <button id="export-logs" class="log-btn">Export Logs</button>
+        <button id="clear-logs" class="log-btn log-btn-danger">Clear Logs</button>
+        <select id="log-filter" aria-label="Filter logs">
+          <option value="all">All Logs</option>
+          <option value="error">Errors Only</option>
+          <option value="warn">Warnings & Errors</option>
+          <option value="switch">Switch Operations</option>
+        </select>
+      </div>
+      <div id="log-viewer-body" class="log-viewer-body"></div>
+      <div class="log-viewer-metrics">
+        <h3>Recent Switch Metrics</h3>
+        <div id="metrics-table" class="metrics-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Debug Button -->
+  <button id="debug-btn" class="debug-btn" title="View Logs (Ctrl+Shift+L)" aria-label="View Logs">🐛</button>
+
+  <script type="module" src="./sidebar.js"></script>
+</body>
+</html>

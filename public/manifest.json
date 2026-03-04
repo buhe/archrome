@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "archrome",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Chrome extension to manage browser spaces using bookmarks.",
   "permissions": [
     "bookmarks",
@@ -10,7 +10,8 @@
     "sidePanel",
     "scripting",
     "activeTab",
-    "alarms"
+    "alarms",
+    "downloads"
   ],
   "action": {
     "default_title": "Open archrome sidebar",
@@ -20,7 +21,8 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "side_panel": {
     "default_path": "sidebar.html"

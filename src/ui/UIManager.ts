@@ -107,6 +107,7 @@ export class UIManager {
         data,
         onClick: this.handleBookmarkClick.bind(this),
         onDelete: this.handleBookmarkDelete.bind(this),
+        showDeleteButton: true,
       });
     });
   }

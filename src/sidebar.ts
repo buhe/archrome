@@ -115,7 +115,24 @@ function setupTabEventListeners(): void {
 
     // Only update if tab status is complete or URL changed
     if (changeInfo.status === 'complete' || changeInfo.url) {
-      await spaceManager.updateTabInSpace(currentSpaceId, tab);
+      const currentUrl = tab.url || tab.pendingUrl;
+
+      // Check if URL is valid before adding/updating the tab
+      if (!isValidUrl(currentUrl)) {
+        return;
+      }
+
+      // Try to update the tab first
+      const space = spaceManager.getSpace(currentSpaceId);
+      const tabIndex = space?.openTabs.findIndex((t) => t.id === tab.id);
+
+      if (tabIndex !== -1 && space) {
+        // Tab exists, update it
+        await spaceManager.updateTabInSpace(currentSpaceId, tab);
+      } else {
+        // Tab doesn't exist (e.g., started with chrome://newtab), add it
+        await spaceManager.addTabToCurrentSpace(tab);
+      }
     }
   });
 }

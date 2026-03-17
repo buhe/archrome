@@ -20,6 +20,7 @@ interface SpaceManagerState {
   pinnedBookmarks: BookmarkData[];
   isSwitching: boolean;
   switchStartTime: number | null;
+  isCreatingSpace: boolean;
 }
 
 /**
@@ -31,6 +32,7 @@ export class SpaceManager {
   private eventListeners: Map<EventType, Set<EventListener>>;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private debounceSwitch: (spaceId: string) => void;
+  private lastActivityTime: number;
 
   constructor() {
     this.state = {
@@ -39,15 +41,20 @@ export class SpaceManager {
       pinnedBookmarks: [],
       isSwitching: false,
       switchStartTime: null,
+      isCreatingSpace: false,
     };
     this.config = DEFAULT_CONFIG;
     this.eventListeners = new Map();
+    this.lastActivityTime = Date.now();
 
     // Create debounced switch function
     this.debounceSwitch = debounce(this.switchSpace.bind(this), this.config.switchDebounceMs);
 
     // Start cleanup interval
     this.startCleanupInterval();
+
+    // Listen for system suspend/resume
+    this.setupSuspendResumeDetection();
   }
 
   /**
@@ -340,6 +347,7 @@ export class SpaceManager {
 
   /**
    * Create a new space (folder)
+   * Returns null if a space with the same name already exists
    */
   async createSpace(name: string): Promise<Space | null> {
     try {
@@ -348,33 +356,54 @@ export class SpaceManager {
         throw new Error('Bookmarks Bar not found');
       }
 
-      const folder = await bookmarkManager.createFolder(bookmarkBar.id, name);
+      // Check if a space with the same name already exists
+      const existingSpace = this.state.spaces.find(
+        (s) => s.name.toLowerCase() === name.toLowerCase()
+      );
 
-      if (!folder) {
-        throw new Error('Failed to create folder');
+      if (existingSpace) {
+        logger.warn('SpaceManager', 'Space with same name already exists', {
+          name,
+          existingId: existingSpace.id,
+        });
+        return null;
       }
 
-      // Add to spaces
-      const spaceInfo = bookmarkManager.folderToSpace(folder);
-      const newSpace: Space = {
-        id: spaceInfo.id,
-        icon: spaceInfo.icon,
-        name: spaceInfo.name,
-        bookmarks: [],
-        openTabs: [],
-      };
+      // Set creating flag to prevent bookmark reload conflicts
+      this.state.isCreatingSpace = true;
 
-      this.state.spaces.push(newSpace);
+      try {
+        const folder = await bookmarkManager.createFolder(bookmarkBar.id, name);
 
-      logger.info('SpaceManager', 'Space created', { spaceId: newSpace.id, name });
+        if (!folder) {
+          throw new Error('Failed to create folder');
+        }
 
-      this.emitEvent({
-        type: EventType.SPACE_CREATED,
-        timestamp: Date.now(),
-        space: newSpace,
-      });
+        // Add to spaces
+        const spaceInfo = bookmarkManager.folderToSpace(folder);
+        const newSpace: Space = {
+          id: spaceInfo.id,
+          icon: spaceInfo.icon,
+          name: spaceInfo.name,
+          bookmarks: [],
+          openTabs: [],
+        };
 
-      return newSpace;
+        this.state.spaces.push(newSpace);
+
+        logger.info('SpaceManager', 'Space created', { spaceId: newSpace.id, name });
+
+        this.emitEvent({
+          type: EventType.SPACE_CREATED,
+          timestamp: Date.now(),
+          space: newSpace,
+        });
+
+        return newSpace;
+      } finally {
+        // Reset creating flag
+        this.state.isCreatingSpace = false;
+      }
     } catch (error) {
       logger.error('SpaceManager', 'Error creating space', {
         name,
@@ -382,6 +411,18 @@ export class SpaceManager {
       });
       return null;
     }
+  }
+
+  /**
+   * Create a new space and switch to it atomically
+   * This prevents conflicts between bookmark reload and space switch
+   */
+  async createAndSwitchSpace(name: string): Promise<Space | null> {
+    const space = await this.createSpace(name);
+    if (space) {
+      await this.switchSpace(space.id);
+    }
+    return space;
   }
 
   /**
@@ -544,8 +585,18 @@ export class SpaceManager {
 
   /**
    * Reload bookmarks for all spaces
+   * Skips reload if currently switching or creating spaces to avoid conflicts
    */
   async reloadBookmarks(): Promise<void> {
+    // Skip reload if currently switching or creating spaces to avoid conflicts
+    if (this.state.isSwitching || this.state.isCreatingSpace) {
+      logger.debug('SpaceManager', 'Skipping bookmark reload during space operation', {
+        isSwitching: this.state.isSwitching,
+        isCreatingSpace: this.state.isCreatingSpace,
+      });
+      return;
+    }
+
     await this.loadSpaces();
     await this.loadPinnedBookmarks();
   }
@@ -733,6 +784,76 @@ export class SpaceManager {
   }
 
   /**
+   * Setup suspend/resume detection using document visibility API
+   * This works in the side panel context
+   */
+  private setupSuspendResumeDetection(): void {
+    // Track last activity time
+    const updateActivity = () => {
+      this.lastActivityTime = Date.now();
+    };
+
+    // Listen for visibility changes (detect wake from sleep)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        // Page became visible - check for long gap (potential sleep/resume)
+        const timeSinceLastActivity = Date.now() - this.lastActivityTime;
+
+        // If more than 30 seconds have passed, assume system was asleep
+        if (timeSinceLastActivity > 30000) {
+          logger.info('SpaceManager', 'Detected potential wake from sleep', {
+            timeSinceLastActivity,
+          });
+
+          // Reset stale states and ensure cleanup interval is running
+          this.handleWakeFromSleep();
+        }
+
+        updateActivity();
+      }
+    });
+
+    // Update activity on user interaction
+    document.addEventListener('click', updateActivity);
+    document.addEventListener('keydown', updateActivity);
+
+    // Also check periodically for time jumps (e.g., system clock changes)
+    setInterval(() => {
+      const now = Date.now();
+      if (now - this.lastActivityTime > 30000) {
+        // No activity for 30+ seconds, but check for actual time jump
+        logger.debug('SpaceManager', 'No recent activity detected');
+      }
+    }, 60000); // Check every minute
+  }
+
+  /**
+   * Handle wake from sleep scenario
+   */
+  private async handleWakeFromSleep(): Promise<void> {
+    try {
+      // Reset all stale states
+      this.resetSwitchingState();
+      this.state.isCreatingSpace = false;
+
+      // Ensure cleanup interval is running
+      if (!this.cleanupInterval) {
+        this.startCleanupInterval();
+        logger.info('SpaceManager', 'Restarted cleanup interval after wake from sleep');
+      }
+
+      // Reload spaces to sync with any changes that occurred during sleep
+      await this.reloadBookmarks();
+
+      logger.info('SpaceManager', 'Recovered from wake from sleep');
+    } catch (error) {
+      logger.error('SpaceManager', 'Error handling wake from sleep', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
    * Cleanup old data and reset stale state
    */
   private async cleanup(): Promise<void> {
@@ -740,6 +861,12 @@ export class SpaceManager {
     if (this.isStateStale()) {
       logger.warn('SpaceManager', 'Resetting stale switching state');
       this.resetSwitchingState();
+    }
+
+    // Reset stale creating state (in case create operation was interrupted)
+    if (this.state.isCreatingSpace) {
+      logger.warn('SpaceManager', 'Resetting stale creating state');
+      this.state.isCreatingSpace = false;
     }
 
     // Cleanup old storage data

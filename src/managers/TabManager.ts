@@ -12,9 +12,44 @@ import { logger } from '@utils/index';
  */
 export class TabManager {
   private config: Config;
+  private chromeApiReady: boolean = true;
 
   constructor(config: Partial<Config> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.checkChromeApiAvailability();
+  }
+
+  /**
+   * Check if Chrome APIs are available
+   */
+  private checkChromeApiAvailability(): void {
+    try {
+      this.chromeApiReady = !!(chrome.tabs && typeof chrome.tabs.query === 'function');
+    } catch {
+      this.chromeApiReady = false;
+    }
+  }
+
+  /**
+   * Wait for Chrome API to be ready (useful after sleep/resume)
+   */
+  private async ensureChromeApiReady(maxWait = 3000): Promise<boolean> {
+    if (this.chromeApiReady) {
+      return true;
+    }
+
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWait) {
+      this.checkChromeApiAvailability();
+      if (this.chromeApiReady) {
+        logger.info('TabManager', 'Chrome API became available');
+        return true;
+      }
+      await delay(50);
+    }
+
+    logger.error('TabManager', 'Chrome API not available after wait', { maxWait });
+    return false;
   }
 
   /**
@@ -22,6 +57,7 @@ export class TabManager {
    */
   async getAllTabs(): Promise<chrome.tabs.Tab[]> {
     try {
+      await this.ensureChromeApiReady();
       return await chrome.tabs.query({});
     } catch (error) {
       logger.error('TabManager', 'Error getting all tabs', {

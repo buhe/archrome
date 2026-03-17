@@ -143,11 +143,48 @@ self.addEventListener('unhandledrejection', (event) => {
 startHeartbeat();
 
 /**
+ * Check if Chrome APIs are ready
+ */
+function isChromeApiReady(): boolean {
+  try {
+    return !!(chrome.tabs && chrome.bookmarks && chrome.storage);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Wait for Chrome APIs to be ready
+ */
+async function waitForChromeApiReady(timeout = 5000): Promise<boolean> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    if (isChromeApiReady()) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  return false;
+}
+
+/**
  * Handle extension startup
  */
-chrome.runtime.onStartup.addListener(() => {
-  logger.info('Background', 'Service worker startup, restarting heartbeat...');
-  startHeartbeat();
+chrome.runtime.onStartup.addListener(async () => {
+  logger.info('Background', 'Service worker startup, waiting for Chrome APIs...');
+
+  // Wait for Chrome APIs to be ready before starting heartbeat
+  const ready = await waitForChromeApiReady();
+
+  if (ready) {
+    logger.info('Background', 'Chrome APIs ready, starting heartbeat...');
+    startHeartbeat();
+  } else {
+    logger.warn('Background', 'Chrome APIs not ready after timeout, starting heartbeat anyway...');
+    startHeartbeat();
+  }
 });
 
 /**

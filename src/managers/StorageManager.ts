@@ -15,6 +15,7 @@ export class StorageManager {
   private config: Config;
   private storeDebouncer: KeyedDebounce<TabData[]>;
   private lastCleanup: number;
+  private chromeApiReady: boolean = true;
 
   constructor(config: Partial<Config> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -23,6 +24,40 @@ export class StorageManager {
       this.config.storageDebounceMs,
     );
     this.lastCleanup = Date.now();
+    this.checkChromeApiAvailability();
+  }
+
+  /**
+   * Check if Chrome storage API is available
+   */
+  private checkChromeApiAvailability(): void {
+    try {
+      this.chromeApiReady = !!(chrome.storage && chrome.storage.local);
+    } catch {
+      this.chromeApiReady = false;
+    }
+  }
+
+  /**
+   * Wait for Chrome API to be ready (useful after sleep/resume)
+   */
+  private async ensureApiReady(maxWait = 3000): Promise<boolean> {
+    if (this.chromeApiReady) {
+      return true;
+    }
+
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWait) {
+      this.checkChromeApiAvailability();
+      if (this.chromeApiReady) {
+        logger.info('StorageManager', 'Chrome storage API became available');
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    logger.error('StorageManager', 'Chrome storage API not available after wait', { maxWait });
+    return false;
   }
 
   /**
@@ -161,11 +196,14 @@ export class StorageManager {
    */
   async updateHeartbeat(): Promise<void> {
     try {
+      await this.ensureApiReady();
       await chrome.storage.local.set({
         [STORAGE_KEYS.LAST_HEARTBEAT]: Date.now(),
       });
     } catch (error) {
       // Silently fail - heartbeat is not critical for functionality
+      // Also refresh API availability check
+      this.checkChromeApiAvailability();
     }
   }
 

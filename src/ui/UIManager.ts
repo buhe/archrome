@@ -25,6 +25,7 @@ export class UIManager {
   private newSpaceBtn: HTMLElement;
   private debugBtn: HTMLElement;
   private currentContextMenu: ContextMenu | null = null;
+  private isRecovering: boolean = false;
 
   constructor() {
     // Initialize list components
@@ -61,6 +62,9 @@ export class UIManager {
     // Setup event listeners
     this.setupEventListeners();
 
+    // Setup sleep/resume detection
+    this.setupSleepResumeDetection();
+
     logger.info('UIManager', 'Initialized');
   }
 
@@ -83,6 +87,107 @@ export class UIManager {
 
     // Listen to bookmark changes
     bookmarkManager.onBookmarkChanged(() => this.handleBookmarkChanged());
+
+    // Setup global error handling for event listeners
+    this.setupGlobalErrorHandling();
+  }
+
+  /**
+   * Setup global error handling to prevent crashes
+   */
+  private setupGlobalErrorHandling(): void {
+    // Handle uncaught errors in event callbacks
+    window.addEventListener('error', (event) => {
+      logger.error('UIManager', 'Uncaught error', {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        error: event.error?.message || String(event.error),
+      });
+    });
+
+    // Handle unhandled promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+      logger.error('UIManager', 'Unhandled promise rejection', {
+        reason: event.reason,
+      });
+
+      // Prevent the rejection from causing an unhandled exception
+      event.preventDefault();
+    });
+  }
+
+  /**
+   * Setup sleep/resume detection using Page Visibility API
+   * This helps detect when the computer wakes from sleep
+   */
+  private setupSleepResumeDetection(): void {
+    let lastVisibilityTime = Date.now();
+
+    document.addEventListener('visibilitychange', async () => {
+      if (!document.hidden) {
+        const timeSinceLastVisible = Date.now() - lastVisibilityTime;
+
+        // If page was hidden for more than 30 seconds, potential sleep/resume
+        if (timeSinceLastVisible > 30000) {
+          logger.info('UIManager', 'Detected potential wake from sleep', {
+            timeSinceLastVisible,
+          });
+
+          // Trigger recovery
+          await this.handleWakeFromSleep();
+        }
+
+        lastVisibilityTime = Date.now();
+      } else {
+        // Page is being hidden, record the time
+        lastVisibilityTime = Date.now();
+      }
+    });
+
+    // Also listen for window focus changes as additional indicator
+    window.addEventListener('focus', async () => {
+      if (!this.isRecovering) {
+        // Refresh UI state on focus to catch any external changes
+        this.updateState();
+      }
+    });
+  }
+
+  /**
+   * Handle wake from sleep scenario
+   */
+  private async handleWakeFromSleep(): Promise<void> {
+    if (this.isRecovering) {
+      logger.debug('UIManager', 'Recovery already in progress, skipping');
+      return;
+    }
+
+    this.isRecovering = true;
+    this.setLoading(true);
+
+    try {
+      logger.info('UIManager', 'Starting recovery from wake from sleep');
+
+      // Wait a bit for Chrome APIs to be ready
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Reload bookmarks
+      await spaceManager.reloadBookmarks();
+
+      // Update UI
+      this.updateState();
+
+      logger.info('UIManager', 'Recovery from wake from sleep completed');
+    } catch (error) {
+      logger.error('UIManager', 'Error during recovery from wake from sleep', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      this.isRecovering = false;
+      this.setLoading(false);
+    }
   }
 
   /**
@@ -230,6 +335,12 @@ export class UIManager {
    * Handle bookmark changed (external change)
    */
   private async handleBookmarkChanged(): Promise<void> {
+    // Skip reload if currently switching spaces to avoid conflicts
+    if (spaceManager.isSwitching()) {
+      logger.debug('UIManager', 'Skipping bookmark reload during space switch');
+      return;
+    }
+
     await spaceManager.reloadBookmarks();
 
     const currentSpace = spaceManager.getCurrentSpace();
@@ -341,11 +452,10 @@ export class UIManager {
     const name = prompt('Enter name for the new space:');
     if (!name || name.trim() === '') return;
 
-    const space = await spaceManager.createSpace(name.trim());
-    if (space) {
-      await spaceManager.switchSpace(space.id);
-    } else {
-      alert('Error creating new space. Check console for details.');
+    // Use atomic create and switch to prevent conflicts
+    const space = await spaceManager.createAndSwitchSpace(name.trim());
+    if (!space) {
+      alert('Error creating new space. A space with this name may already exist. Check console for details.');
     }
   }
 

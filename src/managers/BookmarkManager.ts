@@ -14,10 +14,43 @@ export class BookmarkManager {
   private pinFolderName = 'pin';
 
   /**
+   * Check if Chrome bookmarks API is available
+   */
+  private isApiAvailable(): boolean {
+    try {
+      return !!(chrome.bookmarks && typeof chrome.bookmarks.getTree === 'function');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Wait for Chrome API to be ready
+   */
+  private async ensureApiReady(maxWait = 3000): Promise<boolean> {
+    if (this.isApiAvailable()) {
+      return true;
+    }
+
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWait) {
+      if (this.isApiAvailable()) {
+        logger.info('BookmarkManager', 'Chrome bookmarks API became available');
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    logger.error('BookmarkManager', 'Chrome bookmarks API not available after wait', { maxWait });
+    return false;
+  }
+
+  /**
    * Get the entire bookmark tree
    */
   async getTree(): Promise<BookmarkTreeNode[]> {
     try {
+      await this.ensureApiReady();
       const tree = await chrome.bookmarks.getTree();
       return tree as BookmarkTreeNode[];
     } catch (error) {
@@ -181,9 +214,26 @@ export class BookmarkManager {
 
   /**
    * Create a new folder (space)
+   * Returns null if a folder with the same name already exists
    */
   async createFolder(parentId: string, title: string): Promise<BookmarkTreeNode | null> {
     try {
+      // Check if a folder with the same name already exists
+      const bookmarkBar = await this.getBookmarksBar();
+      if (bookmarkBar && bookmarkBar.children) {
+        const existingFolder = bookmarkBar.children.find(
+          (node) => node.title === title && node.children !== undefined
+        );
+
+        if (existingFolder) {
+          logger.warn('BookmarkManager', 'Folder with same name already exists', {
+            title,
+            existingId: existingFolder.id,
+          });
+          return null;
+        }
+      }
+
       const result = await chrome.bookmarks.create({ parentId, title });
       logger.info('BookmarkManager', 'Folder created', { id: result.id, title });
 

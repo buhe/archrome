@@ -32,7 +32,6 @@ export class SpaceManager {
   private eventListeners: Map<EventType, Set<EventListener>>;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private debounceSwitch: (spaceId: string) => void;
-  private lastActivityTime: number;
 
   constructor() {
     this.state = {
@@ -45,16 +44,12 @@ export class SpaceManager {
     };
     this.config = DEFAULT_CONFIG;
     this.eventListeners = new Map();
-    this.lastActivityTime = Date.now();
 
     // Create debounced switch function
     this.debounceSwitch = debounce(this.switchSpace.bind(this), this.config.switchDebounceMs);
 
     // Start cleanup interval
     this.startCleanupInterval();
-
-    // Listen for system suspend/resume
-    this.setupSuspendResumeDetection();
   }
 
   /**
@@ -781,76 +776,6 @@ export class SpaceManager {
     this.cleanupInterval = setInterval(() => {
       this.cleanup();
     }, 10000); // Check every 10 seconds
-  }
-
-  /**
-   * Setup suspend/resume detection using document visibility API
-   * This works in the side panel context
-   */
-  private setupSuspendResumeDetection(): void {
-    // Track last activity time
-    const updateActivity = () => {
-      this.lastActivityTime = Date.now();
-    };
-
-    // Listen for visibility changes (detect wake from sleep)
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
-        // Page became visible - check for long gap (potential sleep/resume)
-        const timeSinceLastActivity = Date.now() - this.lastActivityTime;
-
-        // If more than 30 seconds have passed, assume system was asleep
-        if (timeSinceLastActivity > 30000) {
-          logger.info('SpaceManager', 'Detected potential wake from sleep', {
-            timeSinceLastActivity,
-          });
-
-          // Reset stale states and ensure cleanup interval is running
-          this.handleWakeFromSleep();
-        }
-
-        updateActivity();
-      }
-    });
-
-    // Update activity on user interaction
-    document.addEventListener('click', updateActivity);
-    document.addEventListener('keydown', updateActivity);
-
-    // Also check periodically for time jumps (e.g., system clock changes)
-    setInterval(() => {
-      const now = Date.now();
-      if (now - this.lastActivityTime > 30000) {
-        // No activity for 30+ seconds, but check for actual time jump
-        logger.debug('SpaceManager', 'No recent activity detected');
-      }
-    }, 60000); // Check every minute
-  }
-
-  /**
-   * Handle wake from sleep scenario
-   */
-  private async handleWakeFromSleep(): Promise<void> {
-    try {
-      // Reset all stale states
-      this.resetSwitchingState();
-      this.state.isCreatingSpace = false;
-
-      // Ensure cleanup interval is running
-      if (!this.cleanupInterval) {
-        this.startCleanupInterval();
-        logger.info('SpaceManager', 'Restarted cleanup interval after wake from sleep');
-      }
-
-      // Reload spaces to sync with any changes that occurred during sleep
-      await this.reloadBookmarks();
-
-      logger.info('SpaceManager', 'Recovered from wake from sleep');
-    } catch (error) {
-      logger.error('SpaceManager', 'Error handling wake from sleep', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
   }
 
   /**

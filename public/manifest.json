@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "archrome",
-  "version": "0.2.0",
+  "version": "1.4.0",
   "description": "A Chrome extension to manage browser spaces using bookmarks.",
   "permissions": [
     "bookmarks",

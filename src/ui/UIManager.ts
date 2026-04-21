@@ -356,7 +356,14 @@ export class UIManager {
    * Handle bookmark click
    */
   private handleBookmarkClick(data: ListItemData): void {
-    chrome.tabs.create({ url: data.url });
+    try {
+      chrome.tabs.create({ url: data.url });
+    } catch (error) {
+      logger.error('UIManager', 'Error creating tab from bookmark', {
+        url: data.url,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**
@@ -376,7 +383,14 @@ export class UIManager {
    * Handle tab click
    */
   private handleTabClick(data: ListItemData): void {
-    chrome.tabs.update(Number(data.id), { active: true });
+    try {
+      chrome.tabs.update(Number(data.id), { active: true });
+    } catch (error) {
+      logger.error('UIManager', 'Error activating tab', {
+        tabId: data.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**
@@ -385,7 +399,11 @@ export class UIManager {
   private async handleTabClose(data: ListItemData): Promise<void> {
     try {
       await chrome.tabs.remove(Number(data.id));
-    } catch {
+    } catch (error) {
+      logger.warn('UIManager', 'Error closing tab, removing from space', {
+        tabId: data.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const currentSpaceId = spaceManager.getCurrentSpaceId();
       if (currentSpaceId) {
         await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
@@ -441,7 +459,14 @@ export class UIManager {
     this.renderBookmarks(currentSpace.bookmarks);
 
     // Close the tab
-    await chrome.tabs.remove(Number(data.id));
+    try {
+      await chrome.tabs.remove(Number(data.id));
+    } catch (error) {
+      logger.warn('UIManager', 'Error closing tab after drop', {
+        tabId: data.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
     await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
   }
 

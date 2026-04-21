@@ -97,6 +97,12 @@ export class TabManager {
    */
   async createTab(url: string, active = true): Promise<chrome.tabs.Tab | null> {
     try {
+      // Ensure Chrome API is ready before creating tab
+      if (!(await this.ensureChromeApiReady())) {
+        logger.error('TabManager', 'Chrome API not ready for tab creation', { url });
+        return null;
+      }
+
       if (!isValidUrl(url)) {
         logger.warn('TabManager', 'Invalid URL for tab creation', { url });
         return null;
@@ -146,6 +152,12 @@ export class TabManager {
    */
   async updateTab(tabId: number, properties: chrome.tabs.UpdateProperties): Promise<boolean> {
     try {
+      // Ensure Chrome API is ready before updating tab
+      if (!(await this.ensureChromeApiReady())) {
+        logger.error('TabManager', 'Chrome API not ready for updating tab', { tabId });
+        return false;
+      }
+
       await chrome.tabs.update(tabId, properties);
       return true;
     } catch (error) {
@@ -167,6 +179,12 @@ export class TabManager {
     }
 
     try {
+      // Ensure Chrome API is ready before closing tabs
+      if (!(await this.ensureChromeApiReady())) {
+        logger.error('TabManager', 'Chrome API not ready for closing tabs', { tabIds });
+        return 0;
+      }
+
       await chrome.tabs.remove(tabIds);
       logger.info('TabManager', 'Tabs closed', { count: tabIds.length });
       return tabIds.length;
@@ -353,6 +371,12 @@ export class TabManager {
    */
   async moveTab(tabId: number, properties: { index?: number; windowId?: number }): Promise<boolean> {
     try {
+      // Ensure Chrome API is ready before moving tab
+      if (!(await this.ensureChromeApiReady())) {
+        logger.error('TabManager', 'Chrome API not ready for moving tab', { tabId });
+        return false;
+      }
+
       await chrome.tabs.move(tabId, properties);
       return true;
     } catch (error) {
@@ -370,6 +394,12 @@ export class TabManager {
    */
   async duplicateTab(tabId: number): Promise<chrome.tabs.Tab | null> {
     try {
+      // Ensure Chrome API is ready before duplicating tab
+      if (!(await this.ensureChromeApiReady())) {
+        logger.error('TabManager', 'Chrome API not ready for duplicating tab', { tabId });
+        return null;
+      }
+
       return await chrome.tabs.duplicate(tabId);
     } catch (error) {
       logger.error('TabManager', 'Error duplicating tab', {

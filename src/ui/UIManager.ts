@@ -477,10 +477,24 @@ export class UIManager {
     const name = prompt('Enter name for the new space:');
     if (!name || name.trim() === '') return;
 
-    // Use atomic create and switch to prevent conflicts
-    const space = await spaceManager.createAndSwitchSpace(name.trim());
-    if (!space) {
-      alert('Error creating new space. A space with this name may already exist. Check console for details.');
+    try {
+      // Check if space manager is already switching
+      if (spaceManager.isSwitching()) {
+        alert('A space operation is already in progress. Please wait.');
+        return;
+      }
+
+      // Use atomic create and switch to prevent conflicts
+      const space = await spaceManager.createAndSwitchSpace(name.trim());
+      if (!space) {
+        alert('Error creating new space. A space with this name may already exist. Check console for details.');
+      }
+    } catch (error) {
+      logger.error('UIManager', 'Error creating new space', {
+        name: name.trim(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+      alert('Error creating new space. The Chrome APIs may not be ready yet. Please try again.');
     }
   }
 

@@ -8,7 +8,7 @@ import { EventType, SwitchStatus, DEFAULT_CONFIG } from '@types/index';
 import { storageManager } from './StorageManager';
 import { bookmarkManager } from './BookmarkManager';
 import { tabManager } from './TabManager';
-import { debounce, formatDuration } from '@utils/index';
+import { debounce, formatDuration, delay } from '@utils/index';
 import { logger } from '@utils/index';
 
 /**
@@ -144,6 +144,20 @@ export class SpaceManager {
     const switchStart = Date.now();
     let metricsIndex = -1;
     let operationSuccess = false;
+
+    // Wait for Chrome APIs to be ready (important after Service Worker resume)
+    // Use a shorter timeout for switches since we expect the user to be actively using the browser
+    const apiReady = await Promise.race([
+      tabManager.ensureChromeApiReady(),
+      delay(5000).then(() => false),
+    ]);
+
+    if (!apiReady) {
+      logger.error('SpaceManager', 'Chrome APIs not ready for space switch', {
+        spaceId: newSpaceId,
+      });
+      return;
+    }
 
     // Check for stale switching state
     if (this.isStateStale()) {
@@ -413,11 +427,30 @@ export class SpaceManager {
    * This prevents conflicts between bookmark reload and space switch
    */
   async createAndSwitchSpace(name: string): Promise<Space | null> {
-    const space = await this.createSpace(name);
-    if (space) {
-      await this.switchSpace(space.id);
+    try {
+      const space = await this.createSpace(name);
+      if (space) {
+        // Add a small delay to ensure the folder creation is fully processed
+        // This is important after Service Worker resume when APIs may be slow
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        // Verify the space still exists before switching
+        const spaceExists = this.hasSpace(space.id);
+        if (!spaceExists) {
+          logger.error('SpaceManager', 'Space disappeared after creation', { spaceId: space.id });
+          return null;
+        }
+
+        await this.switchSpace(space.id);
+      }
+      return space;
+    } catch (error) {
+      logger.error('SpaceManager', 'Error in createAndSwitchSpace', {
+        name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
     }
-    return space;
   }
 
   /**

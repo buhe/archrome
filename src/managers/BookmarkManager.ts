@@ -66,6 +66,12 @@ export class BookmarkManager {
    */
   async getBookmarksBar(): Promise<BookmarkTreeNode | null> {
     try {
+      // Ensure Chrome API is ready before accessing bookmarks
+      if (!(await this.ensureApiReady())) {
+        logger.error('BookmarkManager', 'Chrome API not ready for getting Bookmarks Bar');
+        return null;
+      }
+
       const tree = await this.getTree();
       const bookmarkBar = tree[0]?.children?.find((node) => node.id === this.bookmarkBarId);
 
@@ -190,6 +196,12 @@ export class BookmarkManager {
    */
   async createBookmark(parentId: string, title: string, url: string): Promise<BookmarkData | null> {
     try {
+      // Ensure Chrome API is ready before creating bookmark
+      if (!(await this.ensureApiReady())) {
+        logger.error('BookmarkManager', 'Chrome API not ready for bookmark creation', { parentId, title });
+        return null;
+      }
+
       const result = await chrome.bookmarks.create({ parentId, title, url });
       logger.info('BookmarkManager', 'Bookmark created', { id: result.id, title });
 
@@ -218,6 +230,12 @@ export class BookmarkManager {
    */
   async createFolder(parentId: string, title: string): Promise<BookmarkTreeNode | null> {
     try {
+      // Ensure Chrome API is ready before creating folder
+      if (!(await this.ensureApiReady())) {
+        logger.error('BookmarkManager', 'Chrome API not ready for folder creation', { parentId, title });
+        return null;
+      }
+
       // Check if a folder with the same name already exists
       const bookmarkBar = await this.getBookmarksBar();
       if (bookmarkBar && bookmarkBar.children) {

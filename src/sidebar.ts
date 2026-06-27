@@ -11,6 +11,7 @@ import { tabManager } from '@managers/index';
 import { UIManager } from '@ui/index';
 import { logger } from '@utils/index';
 import { isValidUrl } from '@utils/index';
+import { delay } from '@utils/index';
 
 /**
  * Global UI Manager instance
@@ -18,11 +19,52 @@ import { isValidUrl } from '@utils/index';
 let uiManager: UIManager | null = null;
 
 /**
+ * Check if Chrome APIs are available
+ */
+function isChromeApiReady(): boolean {
+  try {
+    return !!(chrome.tabs && chrome.bookmarks && chrome.storage && chrome.runtime);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Wait for Chrome APIs to be ready
+ * This is critical after Service Worker resume from suspension
+ */
+async function waitForChromeApiReady(timeout = 10000): Promise<boolean> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeout) {
+    if (isChromeApiReady()) {
+      logger.info('App', 'Chrome APIs are ready');
+      return true;
+    }
+    await delay(100);
+  }
+
+  logger.error('App', 'Chrome APIs not ready after timeout', { timeout });
+  return false;
+}
+
+/**
  * Initialize the application
  */
 async function initializeApp(): Promise<void> {
   try {
     logger.info('App', 'Initializing Archrome sidebar');
+
+    // Wait for Chrome APIs to be ready before proceeding
+    // This is critical after Service Worker resume from suspension
+    const apiReady = await waitForChromeApiReady();
+
+    if (!apiReady) {
+      throw new Error('Chrome APIs failed to become ready');
+    }
+
+    // Additional delay to ensure all APIs are fully operational
+    await delay(200);
 
     // Initialize space manager
     await spaceManager.initialize();
@@ -42,10 +84,15 @@ async function initializeApp(): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
     });
 
-    // Retry once after a delay
+    // Retry once after a delay with API readiness check
     setTimeout(async () => {
       try {
         logger.info('App', 'Retrying initialization...');
+
+        // Wait for APIs again before retry
+        await waitForChromeApiReady();
+        await delay(200);
+
         await spaceManager.initialize();
         if (!uiManager) {
           uiManager = new UIManager();
@@ -57,7 +104,7 @@ async function initializeApp(): Promise<void> {
           error: retryError instanceof Error ? retryError.message : String(retryError),
         });
       }
-    }, 1000);
+    }, 2000);
   }
 }
 
@@ -192,9 +239,27 @@ function setupCleanupHandlers(): void {
  * Bootstrap the application when DOM is ready
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  setupErrorHandlers();
-  setupCleanupHandlers();
-  await initializeApp();
+  try {
+    setupErrorHandlers();
+    setupCleanupHandlers();
+    await initializeApp();
+  } catch (error) {
+    logger.critical('App', 'Fatal error during bootstrap', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    // Display user-friendly error message
+    document.body.innerHTML = `
+      <div style="padding: 20px; text-align: center; font-family: system-ui;">
+        <h2>Archrome Initialization Failed</h2>
+        <p>Please reload the page. If the problem persists, restart Chrome.</p>
+        <button onclick="location.reload()" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">
+          Reload
+        </button>
+      </div>
+    `;
+  }
 });
 
 // Log initial load

@@ -33,7 +33,7 @@ export class TabManager {
   /**
    * Wait for Chrome API to be ready (useful after sleep/resume)
    */
-  private async ensureChromeApiReady(maxWait = 3000): Promise<boolean> {
+  async ensureChromeApiReady(maxWait = 3000): Promise<boolean> {
     if (this.chromeApiReady) {
       return true;
     }

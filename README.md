@@ -6,6 +6,8 @@
 
 An Arc browser-inspired tool for managing browser spaces using bookmarks.
 
+Spaces and saved links are driven by your browser’s native bookmarks and folders. The data stays in Chrome—not locked inside the extension—so it remains yours even if you stop using Archrome.
+
 <p align="center">
   <img src="x.png" alt="Archrome space picker screenshot" width="480">
 </p>

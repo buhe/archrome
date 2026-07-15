@@ -10,27 +10,27 @@ An Arc browser-inspired tool for managing browser spaces using bookmarks.
 
 ### Spaces
 
-* **Organize with Spaces:** Create distinct "spaces" to separate your work, personal projects, or any other context.
-* **Bookmark-Powered:** Each space is powered by a bookmark folder, making it easy to manage and sync across devices.
-* **Custom Icons:** Use an emoji as the first character of your bookmark folder name to serve as the space's icon.
-* **Seamless Switching:** When you switch between spaces, your current tabs are saved and closed, and the tabs for the new space are automatically opened.
+* **Organize with Spaces:** Separate work, personal, and other contexts via bookmark folders.
+* **Custom Icons:** Leading emoji in the folder name becomes the space icon.
+* **Seamless Switching:** Current tabs are saved/closed; target space tabs reopen automatically.
+* **Delete Space:** Right-click a space → Delete (with confirmation).
 
-### Tab Management
+### Tabs & Bookmarks
 
-* **Active Tabs List:** See all your open tabs for the current space in a dedicated list.
-* **Quickly Close Tabs:** Close tabs directly from the sidebar.
-* **Move Tabs Between Spaces:** Right-click a tab to easily move it to another space.
-* **Drag and Drop:** Drag tabs to the bookmarks section to save them as bookmarks.
+* **Active Tabs:** List, close, and manage open tabs in the sidebar.
+* **Move Tabs:** Right-click a tab to move it to another space.
+* **Drag & Drop:** Drag tabs into bookmarks to save them.
+* **Pinned Bookmarks:** Pin important links for quick access.
 
-### Bookmarks
+### Theme
 
-* **Space-Specific Bookmarks:** View all the bookmarks for the current space right in the sidebar.
-* **Pinned Items:** Keep your most important links always accessible in the "Pinned" section.
+* **Dark / Light:** Toggle in the sidebar footer; preference is saved and defaults to system theme.
 
 ### Keyboard Shortcuts
 
 * **Toggle Sidebar:** `Alt+Q` (Windows/Linux) or `Option+Q` (Mac)
-* **Open Log Viewer:** `Ctrl+Shift+L` (Windows/Linux) or `Cmd+Shift+L` (Mac)
+* **Open Log Viewer:** `Ctrl+Shift+L` / `Cmd+Shift+L`
+
 
 ## Architecture
 

@@ -6,6 +6,10 @@
 
 An Arc browser-inspired tool for managing browser spaces using bookmarks.
 
+<p align="center">
+  <img src="x.png" alt="Archrome space picker screenshot" width="480">
+</p>
+
 ## Features
 
 ### Spaces

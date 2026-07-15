@@ -6,6 +6,10 @@
 
 灵感来自 Arc 浏览器的空间管理工具，基于书签实现。
 
+<p align="center">
+  <img src="x.png" alt="Archrome 空间选择界面截图" width="480">
+</p>
+
 ## 功能
 
 ### 空间（Spaces）

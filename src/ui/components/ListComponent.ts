@@ -25,7 +25,7 @@ export class ListComponent {
   constructor(options: ListOptions) {
     this.options = options;
     this.container = document.getElementById(options.containerId)!;
-    this.emptyMessage = options.emptyMessage || 'No items';
+    this.emptyMessage = options.emptyMessage ?? 'No items';
 
     if (!this.container) {
       throw new Error(`Container with id "${options.containerId}" not found`);
@@ -133,6 +133,10 @@ export class ListComponent {
    * Show empty message
    */
   showEmptyMessage(): void {
+    if (!this.emptyMessage) {
+      this.container.innerHTML = '';
+      return;
+    }
     this.container.innerHTML = `<li class="empty-message">${this.emptyMessage}</li>`;
   }
 

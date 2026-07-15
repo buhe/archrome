@@ -46,7 +46,7 @@ export class UIManager {
 
     this.tabsList = new ListComponent({
       containerId: 'tabs-list',
-      emptyMessage: 'No open tabs in this space.',
+      emptyMessage: '',
     });
 
     // Get other elements

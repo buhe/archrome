@@ -278,8 +278,67 @@ export class UIManager {
         spaceManager.triggerSwitch(space.id);
       });
 
+      // Right-click: delete space
+      li.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.handleSpaceContextMenu(space, event);
+      });
+
       this.spacesList.appendChild(li);
     });
+  }
+
+  /**
+   * Handle space context menu (right-click)
+   */
+  private handleSpaceContextMenu(space: Space, event: MouseEvent): void {
+    this.closeContextMenu();
+
+    this.currentContextMenu = new ContextMenu({
+      items: [
+        {
+          label: 'Delete space',
+          icon: '🗑️',
+          action: async () => {
+            await this.handleDeleteSpace(space);
+          },
+        },
+      ],
+      position: { x: event.pageX, y: event.pageY },
+      onClose: () => {
+        this.currentContextMenu = null;
+      },
+    });
+  }
+
+  /**
+   * Delete a space after confirmation
+   */
+  private async handleDeleteSpace(space: Space): Promise<void> {
+    const confirmed = confirm(
+      `Delete space "${space.name}"?\n\nBookmarks in this space will also be deleted. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      if (spaceManager.isSwitching()) {
+        alert('A space operation is already in progress. Please wait.');
+        return;
+      }
+
+      const success = await spaceManager.deleteSpace(space.id);
+      if (!success) {
+        alert('Failed to delete space. Check console for details.');
+      }
+    } catch (error) {
+      logger.error('UIManager', 'Error deleting space', {
+        spaceId: space.id,
+        spaceName: space.name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      alert('Error deleting space. Please try again.');
+    }
   }
 
   /**

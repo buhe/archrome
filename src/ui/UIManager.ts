@@ -3,11 +3,12 @@
  * Handles rendering of bookmarks, tabs, spaces, and pinned items
  */
 
-import type { Space, BookmarkData, TabData, AppEvent } from '@types/index';
+import type { Space, BookmarkData, TabData, AppEvent, Theme } from '@types/index';
 import { EventType } from '@types/index';
 import { spaceManager } from '@managers/index';
 import { bookmarkManager } from '@managers/index';
 import { tabManager } from '@managers/index';
+import { storageManager } from '@managers/index';
 import { ListItemComponent, ListComponent, ContextMenu, LogViewer } from './components';
 import type { ListItemData } from './components/ListItemComponent';
 import { isEmoji, getFaviconUrl, getDisplayText } from '@utils/index';
@@ -23,9 +24,11 @@ export class UIManager {
   private spacesList: HTMLElement;
   private logViewer: LogViewer;
   private newSpaceBtn: HTMLElement;
+  private themeToggleBtn: HTMLElement;
   private debugBtn: HTMLElement;
   private currentContextMenu: ContextMenu | null = null;
   private isRecovering: boolean = false;
+  private currentTheme: Theme = 'light';
 
   constructor() {
     // Initialize list components
@@ -49,6 +52,7 @@ export class UIManager {
     // Get other elements
     this.spacesList = document.getElementById('spaces-list')!;
     this.newSpaceBtn = document.querySelector('.new-space-btn')!;
+    this.themeToggleBtn = document.getElementById('theme-toggle-btn')!;
     this.debugBtn = document.getElementById('debug-btn')!;
 
     // Initialize log viewer
@@ -65,6 +69,9 @@ export class UIManager {
     // Setup sleep/resume detection
     this.setupSleepResumeDetection();
 
+    // Restore theme preference (async, non-blocking)
+    void this.initTheme();
+
     logger.info('UIManager', 'Initialized');
   }
 
@@ -74,6 +81,9 @@ export class UIManager {
   private setupEventListeners(): void {
     // New space button
     this.newSpaceBtn.addEventListener('click', () => this.handleNewSpace());
+
+    // Theme toggle button
+    this.themeToggleBtn.addEventListener('click', () => void this.handleThemeToggle());
 
     // Debug button
     this.debugBtn.addEventListener('click', () => this.logViewer.open());
@@ -496,6 +506,53 @@ export class UIManager {
       });
       alert('Error creating new space. The Chrome APIs may not be ready yet. Please try again.');
     }
+  }
+
+  /**
+   * Initialize theme from storage or system preference
+   */
+  private async initTheme(): Promise<void> {
+    try {
+      const saved = await storageManager.getTheme();
+      const theme =
+        saved ??
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      this.applyTheme(theme);
+    } catch (error) {
+      logger.warn('UIManager', 'Failed to init theme, using light', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.applyTheme('light');
+    }
+  }
+
+  /**
+   * Apply theme to document and update toggle button
+   */
+  private applyTheme(theme: Theme): void {
+    this.currentTheme = theme;
+    document.documentElement.setAttribute('data-theme', theme);
+
+    // Show the opposite mode's icon as the action affordance
+    if (theme === 'dark') {
+      this.themeToggleBtn.textContent = '☀️';
+      this.themeToggleBtn.setAttribute('title', 'Switch to light theme');
+      this.themeToggleBtn.setAttribute('aria-label', 'Switch to light theme');
+    } else {
+      this.themeToggleBtn.textContent = '🌙';
+      this.themeToggleBtn.setAttribute('title', 'Switch to dark theme');
+      this.themeToggleBtn.setAttribute('aria-label', 'Switch to dark theme');
+    }
+  }
+
+  /**
+   * Toggle between dark and light themes
+   */
+  private async handleThemeToggle(): Promise<void> {
+    const nextTheme: Theme = this.currentTheme === 'dark' ? 'light' : 'dark';
+    this.applyTheme(nextTheme);
+    await storageManager.setTheme(nextTheme);
+    logger.info('UIManager', 'Theme changed', { theme: nextTheme });
   }
 
   /**

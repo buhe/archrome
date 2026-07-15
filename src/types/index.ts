@@ -129,9 +129,15 @@ export const STORAGE_KEYS = {
   SWITCH_METRICS: 'archrome_switch_metrics',
   LAST_ACTIVE_SPACE: 'last_active_space_id',
   LAST_HEARTBEAT: 'last_heartbeat',
+  THEME: 'archrome_theme',
   SPACE_TABS_PREFIX: 'space_',
   SPACE_TABS_SUFFIX: '_tabs',
 } as const;
+
+/**
+ * UI color theme
+ */
+export type Theme = 'light' | 'dark';
 
 export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
 

@@ -3,7 +3,7 @@
  * Provides debounced storage and a unified interface for data persistence
  */
 
-import type { TabData, SwitchMetric, Config } from '@types/index';
+import type { TabData, SwitchMetric, Config, Theme } from '@types/index';
 import { STORAGE_KEYS, DEFAULT_CONFIG } from '@types/index';
 import { KeyedDebounce, cleanTabsData } from '@utils/index';
 import { logger } from '@utils/index';
@@ -216,6 +216,39 @@ export class StorageManager {
       return (result[STORAGE_KEYS.LAST_HEARTBEAT] as number) || null;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Get saved UI theme preference
+   */
+  async getTheme(): Promise<Theme | null> {
+    try {
+      const result = await chrome.storage.local.get([STORAGE_KEYS.THEME]);
+      const theme = result[STORAGE_KEYS.THEME] as Theme | undefined;
+      if (theme === 'light' || theme === 'dark') {
+        return theme;
+      }
+      return null;
+    } catch (error) {
+      logger.error('StorageManager', 'Error getting theme', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Save UI theme preference
+   */
+  async setTheme(theme: Theme): Promise<void> {
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEYS.THEME]: theme });
+    } catch (error) {
+      logger.error('StorageManager', 'Error setting theme', {
+        theme,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

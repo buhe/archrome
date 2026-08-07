@@ -316,8 +316,13 @@ export class UIManager {
    * Delete a space after confirmation
    */
   private async handleDeleteSpace(space: Space): Promise<void> {
+    const bookmarkCount = space.bookmarks.length;
+    const bookmarkWarning =
+      bookmarkCount > 0
+        ? `\n\nThis space contains ${bookmarkCount} bookmark${bookmarkCount === 1 ? '' : 's'}, which will also be deleted.`
+        : '';
     const confirmed = confirm(
-      `Delete space "${space.name}"?\n\nBookmarks in this space will also be deleted. This cannot be undone.`,
+      `Delete space "${space.name}"?${bookmarkWarning}\n\nThis cannot be undone.`,
     );
     if (!confirmed) return;
 

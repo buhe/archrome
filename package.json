@@ -30,17 +30,17 @@
     "@types/chrome": "^0.0.287",
     "@typescript-eslint/eslint-plugin": "^8.19.1",
     "@typescript-eslint/parser": "^8.19.1",
-    "@vitest/ui": "^2.1.8",
     "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/ui": "^2.1.8",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "^2.31.0",
+    "globals": "^15.13.0",
+    "jsdom": "^29.1.1",
     "prettier": "^3.4.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
     "vite-plugin-static-copy": "^2.2.0",
-    "vitest": "^2.1.8",
-    "globals": "^15.13.0"
-  },
-  "dependencies": {}
+    "vitest": "^2.1.8"
+  }
 }

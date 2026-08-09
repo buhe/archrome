@@ -6,13 +6,15 @@ import type { TabData, BookmarkData } from '@types/index';
 
 /**
  * Check if a character is an emoji
+ * Uses code-point iteration so surrogate-pair emojis (😀, 🎉, etc.) are handled correctly.
  */
 export function isEmoji(char: string): boolean {
   if (!char || char.length === 0) return false;
 
+  const first = Array.from(char)[0];
   const emojiRegex =
     /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F018}-\u{1F270}]/u;
-  return emojiRegex.test(char[0]);
+  return emojiRegex.test(first);
 }
 
 /**
@@ -26,8 +28,9 @@ export function extractIconAndName(title: string): { icon: string; name: string 
     return { icon: defaultIcon, name: '' };
   }
 
-  if (isEmoji(title)) {
-    return { icon: title[0], name: title.substring(1).trim() };
+  const chars = Array.from(title);
+  if (isEmoji(chars[0])) {
+    return { icon: chars[0], name: chars.slice(1).join('').trim() };
   }
 
   return { icon: defaultIcon, name: title };

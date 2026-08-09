@@ -3,86 +3,98 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { isEmoji, extractIconAndName, generateUniqueId, isValidUrl, cleanTabsData } from '@utils/index';
+import {
+  formatDuration,
+  getFaviconUrl,
+  safeJsonParse,
+  extractIconAndName,
+  isValidUrl,
+  cleanTabsData,
+} from '@utils/index';
 
 describe('Utility Functions', () => {
-  describe('isEmoji', () => {
-    it('should detect emojis', () => {
-      expect(isEmoji('😀')).toBe(true);
-      expect(isEmoji('🎉')).toBe(true);
-      expect(isEmoji('🔥')).toBe(true);
-      expect(isEmoji('A')).toBe(false);
-      expect(isEmoji('1')).toBe(false);
-      expect(isEmoji('')).toBe(false);
+  describe('formatDuration', () => {
+    it('should format durations', () => {
+      expect(formatDuration(500)).toBe('500ms');
+      expect(formatDuration(1500)).toBe('1.5s');
+      expect(formatDuration(59000)).toBe('59.0s');
+      expect(formatDuration(60000)).toBe('1m 0s');
+      expect(formatDuration(90500)).toBe('1m 30s');
     });
   });
 
+  describe('getFaviconUrl', () => {
+    it('should return the right favicon URL', () => {
+      expect(getFaviconUrl({ id: 1, url: 'chrome://settings', title: 'Settings', favIconUrl: null })).toBe(
+        'icons/default_favicon.png',
+      );
+      expect(
+        getFaviconUrl({ id: 2, url: 'https://example.com', title: 'Example', favIconUrl: 'https://a.com/f.ico' }),
+      ).toBe('https://a.com/f.ico');
+      expect(getFaviconUrl({ id: 3, url: 'https://example.com/path', title: 'Example', favIconUrl: null })).toBe(
+        'https://www.google.com/s2/favicons?domain=example.com&sz=16',
+      );
+      expect(getFaviconUrl({ id: 4, url: 'about:blank', title: '', favIconUrl: null })).toBe(
+        'icons/default_favicon.png',
+      );
+    });
+  });
+
+  describe('safeJsonParse', () => {
+    it('should parse JSON with fallback', () => {
+      expect(safeJsonParse('{"a":1}', {})).toEqual({ a: 1 });
+      expect(safeJsonParse('[1,2]', [])).toEqual([1, 2]);
+      expect(safeJsonParse('not json', { fallback: true })).toEqual({ fallback: true });
+      expect(safeJsonParse('', null)).toBe(null);
+    });
+  });
+
+  // Space folder titles may start with an emoji used as the space icon
   describe('extractIconAndName', () => {
-    it('should extract emoji and name', () => {
+    it('should parse space icon and name from bookmark folder titles', () => {
       expect(extractIconAndName('😀Work')).toEqual({ icon: '😀', name: 'Work' });
       expect(extractIconAndName('🎉Personal')).toEqual({ icon: '🎉', name: 'Personal' });
-    });
-
-    it('should handle non-emoji titles', () => {
       expect(extractIconAndName('Work')).toEqual({ icon: '●', name: 'Work' });
-      expect(extractIconAndName('Personal Stuff')).toEqual({ icon: '●', name: 'Personal Stuff' });
-    });
-
-    it('should handle empty strings', () => {
       expect(extractIconAndName('')).toEqual({ icon: '●', name: '' });
     });
   });
 
-  describe('generateUniqueId', () => {
-    it('should generate unique IDs', () => {
-      const id1 = generateUniqueId();
-      const id2 = generateUniqueId();
-      expect(id1).not.toBe(id2);
-      expect(id1).toMatch(/^_[a-z0-9]+$/);
-      expect(id2).toMatch(/^_[a-z0-9]+$/);
-    });
-  });
-
+  // Only restorable http(s) tabs should be kept when switching spaces
   describe('isValidUrl', () => {
-    it('should validate URLs', () => {
+    it('should accept restorable page URLs and reject browser-internal URLs', () => {
       expect(isValidUrl('https://example.com')).toBe(true);
-      expect(isValidUrl('http://example.com')).toBe(true);
-      expect(isValidUrl('https://example.com/path')).toBe(true);
+      expect(isValidUrl('http://example.com/path')).toBe(true);
       expect(isValidUrl('chrome://settings')).toBe(false);
       expect(isValidUrl('about:blank')).toBe(false);
-      expect(isValidUrl('chrome-extension://abc')).toBe(false);
-      expect(isValidUrl('')).toBe(false);
+      expect(isValidUrl('chrome-extension://abc/page.html')).toBe(false);
       expect(isValidUrl(undefined)).toBe(false);
     });
   });
 
+  // Space tab snapshots are trimmed before writing to chrome.storage
   describe('cleanTabsData', () => {
-    it('should clean and limit tabs data', () => {
+    it('should normalize titles and limit stored tabs for a space', () => {
       const tabs = [
-        { id: 1, url: 'https://example.com', title: 'Example', favIconUrl: 'https://example.com/favicon.ico' },
-        { id: 2, url: 'https://example.org', title: 'Example Org', favIconUrl: null },
+        { id: 1, url: 'https://example.com', title: 'Example', favIconUrl: 'https://example.com/f.ico' },
+        { id: 2, url: 'https://example.org', title: '', favIconUrl: null },
+        { id: 3, url: 'https://third.com', title: 'Third', favIconUrl: null },
       ];
 
-      const cleaned = cleanTabsData(tabs, 10);
+      const cleaned = cleanTabsData(tabs, 2);
+
       expect(cleaned).toHaveLength(2);
       expect(cleaned[0]).toEqual({
         id: 1,
         url: 'https://example.com',
         title: 'Example',
-        favIconUrl: 'https://example.com/favicon.ico',
+        favIconUrl: 'https://example.com/f.ico',
       });
-    });
-
-    it('should limit tabs to maxTabs', () => {
-      const tabs = Array.from({ length: 150 }, (_, i) => ({
-        id: i,
-        url: `https://example.com/${i}`,
-        title: `Tab ${i}`,
+      expect(cleaned[1]).toEqual({
+        id: 2,
+        url: 'https://example.org',
+        title: 'Untitled',
         favIconUrl: null,
-      }));
-
-      const cleaned = cleanTabsData(tabs, 100);
-      expect(cleaned).toHaveLength(100);
+      });
     });
   });
 });

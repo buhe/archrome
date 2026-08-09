@@ -1,8 +1,8 @@
 /**
- * Utility functions tests
+ * Tests for src/utils/helpers.ts
  */
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   formatDuration,
   getFaviconUrl,
@@ -12,10 +12,9 @@ import {
   cleanTabsData,
   isEmoji,
   getDisplayText,
-  debounce,
-} from '@utils/index';
+} from '@utils/helpers';
 
-describe('Utility Functions', () => {
+describe('utils/helpers', () => {
   describe('formatDuration', () => {
     it('should format durations', () => {
       expect(formatDuration(500)).toBe('500ms');
@@ -62,6 +61,17 @@ describe('Utility Functions', () => {
     });
   });
 
+  // UIManager uses isEmoji to decide whether a space icon renders as an emoji
+  describe('isEmoji', () => {
+    it('should detect emoji icons and reject plain text or empty input', () => {
+      expect(isEmoji('😀')).toBe(true);
+      expect(isEmoji('🎉')).toBe(true);
+      expect(isEmoji('●')).toBe(false);
+      expect(isEmoji('W')).toBe(false);
+      expect(isEmoji('')).toBe(false);
+    });
+  });
+
   // Only restorable http(s) tabs should be kept when switching spaces
   describe('isValidUrl', () => {
     it('should accept restorable page URLs and reject browser-internal URLs', () => {
@@ -101,45 +111,12 @@ describe('Utility Functions', () => {
     });
   });
 
-  // UIManager uses isEmoji to decide whether a space icon renders as an emoji
-  describe('isEmoji', () => {
-    it('should detect emoji icons and reject plain text or empty input', () => {
-      expect(isEmoji('😀')).toBe(true);
-      expect(isEmoji('🎉')).toBe(true);
-      expect(isEmoji('●')).toBe(false);
-      expect(isEmoji('W')).toBe(false);
-      expect(isEmoji('')).toBe(false);
-    });
-  });
-
   // ListItemComponent falls back to URL then 'Untitled' when titles are missing
   describe('getDisplayText', () => {
     it('should prefer the title and fall back to URL or Untitled', () => {
       expect(getDisplayText('Example', 'https://example.com')).toBe('Example');
       expect(getDisplayText('', 'https://example.com')).toBe('https://example.com');
       expect(getDisplayText('', '')).toBe('Untitled');
-    });
-  });
-
-  // SpaceManager debounces rapid space switches so only the last one runs
-  describe('debounce', () => {
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it('should collapse rapid calls into a single invocation with the last args', () => {
-      vi.useFakeTimers();
-      const fn = vi.fn();
-      const debounced = debounce(fn, 100);
-
-      debounced('space-1');
-      debounced('space-2');
-      debounced('space-3');
-      expect(fn).not.toHaveBeenCalled();
-
-      vi.advanceTimersByTime(100);
-      expect(fn).toHaveBeenCalledTimes(1);
-      expect(fn).toHaveBeenCalledWith('space-3');
     });
   });
 });

@@ -107,6 +107,8 @@ export class ListComponent {
   clear(): void {
     this.items.forEach((item) => item.remove());
     this.items.clear();
+    // Also remove empty-message / leftover nodes so re-renders start clean
+    this.container.innerHTML = '';
   }
 
   /**

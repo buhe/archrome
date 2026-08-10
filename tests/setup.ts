@@ -149,6 +149,17 @@ function createChromeMock() {
     },
     runtime: {
       id: 'test-extension',
+      getManifest: vi.fn(() => ({ version: '0.0.0' })),
+      onInstalled: { addListener: vi.fn() },
+      onStartup: { addListener: vi.fn() },
+      onSuspend: { addListener: vi.fn() },
+      onMessage: { addListener: vi.fn() },
+    },
+    action: {
+      onClicked: { addListener: vi.fn() },
+    },
+    sidePanel: {
+      setPanelBehavior: vi.fn(async () => undefined),
     },
   };
 }

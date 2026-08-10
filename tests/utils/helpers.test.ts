@@ -2,7 +2,7 @@
  * Tests for src/utils/helpers.ts
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   formatDuration,
   getFaviconUrl,
@@ -12,6 +12,15 @@ import {
   cleanTabsData,
   isEmoji,
   getDisplayText,
+  formatTime,
+  generateUniqueId,
+  isTabOpen,
+  delay,
+  retryWithBackoff,
+  createDownloadUrl,
+  downloadFile,
+  exportAsJson,
+  deepClone,
 } from '@utils/helpers';
 
 describe('utils/helpers', () => {
@@ -117,6 +126,111 @@ describe('utils/helpers', () => {
       expect(getDisplayText('Example', 'https://example.com')).toBe('Example');
       expect(getDisplayText('', 'https://example.com')).toBe('https://example.com');
       expect(getDisplayText('', '')).toBe('Untitled');
+    });
+  });
+
+  describe('formatTime', () => {
+    it('formats a timestamp into a time string', () => {
+      const out = formatTime(0);
+      expect(typeof out).toBe('string');
+      expect(out.length).toBeGreaterThan(0);
+      // string and number inputs both work
+      expect(formatTime('2020-01-01T00:00:00.000Z')).toEqual(expect.any(String));
+    });
+  });
+
+  describe('generateUniqueId', () => {
+    it('produces unique ids with the expected prefix', () => {
+      const a = generateUniqueId();
+      const b = generateUniqueId();
+      expect(a).toMatch(/^_/);
+      expect(a).not.toBe(b);
+    });
+  });
+
+  describe('isTabOpen', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('returns true when chrome.tabs.get resolves', async () => {
+      vi.spyOn(chrome.tabs, 'get').mockResolvedValue({ id: 1 } as never);
+      expect(await isTabOpen(1)).toBe(true);
+    });
+
+    it('returns false when chrome.tabs.get rejects', async () => {
+      vi.spyOn(chrome.tabs, 'get').mockRejectedValue(new Error('no tab'));
+      expect(await isTabOpen(99)).toBe(false);
+    });
+  });
+
+  describe('delay', () => {
+    it('resolves after the given milliseconds', async () => {
+      const start = Date.now();
+      await delay(10);
+      expect(Date.now() - start).toBeGreaterThanOrEqual(5);
+    });
+  });
+
+  describe('retryWithBackoff', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('returns the value once the function succeeds', async () => {
+      const fn = vi.fn().mockResolvedValue('ok');
+      await expect(retryWithBackoff(fn, 3, 1)).resolves.toBe('ok');
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries on failure and eventually throws the last error', async () => {
+      const fn = vi.fn().mockRejectedValue(new Error('fail'));
+      await expect(retryWithBackoff(fn, 2, 1)).rejects.toThrow('fail');
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+
+    it('succeeds after a transient failure', async () => {
+      let calls = 0;
+      const fn = vi.fn().mockImplementation(async () => {
+        calls++;
+        if (calls === 1) throw new Error('transient');
+        return 'recovered';
+      });
+      await expect(retryWithBackoff(fn, 3, 1)).resolves.toBe('recovered');
+      expect(fn).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('createDownloadUrl / downloadFile / exportAsJson', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('createDownloadUrl builds an object URL', () => {
+      const url = createDownloadUrl('{}');
+      expect(url).toMatch(/^blob:/);
+    });
+
+    it('downloadFile delegates to chrome.downloads.download', async () => {
+      await downloadFile('https://example.com/file.json', 'file.json');
+      expect(chrome.downloads.download).toHaveBeenCalledWith({
+        url: 'https://example.com/file.json',
+        filename: 'file.json',
+        saveAs: true,
+      });
+    });
+
+    it('exportAsJson serializes data and triggers a download', async () => {
+      const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+      await exportAsJson({ a: 1 }, 'out.json');
+      expect(chrome.downloads.download).toHaveBeenCalled();
+      expect(revoke).toHaveBeenCalled();
+    });
+  });
+
+  describe('deepClone', () => {
+    it('produces an equal but independent copy', () => {
+      const original = { a: 1, nested: { b: 2 } };
+      const clone = deepClone(original);
+      expect(clone).toEqual(original);
+      expect(clone).not.toBe(original);
+      expect(clone.nested).not.toBe(original.nested);
     });
   });
 });

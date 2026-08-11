@@ -20,14 +20,12 @@ describe('Logger', () => {
     vi.restoreAllMocks();
   });
 
-  it('writes a log entry to storage and console', async () => {
+  it('writes a log entry to console only (persistence disabled to avoid storage races)', async () => {
     await logger.info('Test', 'hello');
 
+    // 持久化已禁用：storage 不应被写入
     const stored = await chrome.storage.local.get([STORAGE_KEYS.LOGS]);
-    const logs = stored[STORAGE_KEYS.LOGS] as Array<{ message: string; level: number }>;
-    expect(logs).toHaveLength(1);
-    expect(logs[0].message).toBe('hello');
-    expect(logs[0].level).toBe(LogLevel.INFO);
+    expect(stored[STORAGE_KEYS.LOGS]).toBeUndefined();
 
     expect(consoleSpy).toHaveBeenCalled();
   });
@@ -38,29 +36,26 @@ describe('Logger', () => {
     expect(call).toBeTruthy();
   });
 
-  it('keeps only the most recent logs up to maxLogs', async () => {
+  it('does not persist logs to storage (persistence disabled)', async () => {
     for (let i = 0; i < 8; i++) {
       await logger.debug('Test', `msg-${i}`);
     }
     const stored = await chrome.storage.local.get([STORAGE_KEYS.LOGS]);
-    const logs = stored[STORAGE_KEYS.LOGS] as unknown[];
-    // maxLogs is 5
-    expect(logs).toHaveLength(5);
+    expect(stored[STORAGE_KEYS.LOGS]).toBeUndefined();
   });
 
-  it('getLogs returns all logs when no filter', async () => {
+  it('getLogs returns [] when persistence is disabled', async () => {
     await logger.debug('Test', 'd');
     await logger.error('Test', 'e');
     const logs = await logger.getLogs();
-    expect(logs).toHaveLength(2);
+    expect(logs).toEqual([]);
   });
 
-  it('getLogs filters by minimum level', async () => {
+  it('getLogs returns [] for level filter as well when persistence is disabled', async () => {
     await logger.debug('Test', 'd');
     await logger.error('Test', 'e');
     const logs = await logger.getLogs(LogLevel.ERROR);
-    expect(logs).toHaveLength(1);
-    expect(logs[0].message).toBe('e');
+    expect(logs).toEqual([]);
   });
 
   it('clearLogs empties logs and metrics', async () => {

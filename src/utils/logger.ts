@@ -36,8 +36,13 @@ export class Logger {
       this.outputToConsole(logEntry);
     }
 
-    // Persistent storage
-    await this.writeToStorage(logEntry);
+    // NOTE: 持久化日志已禁用。
+    // writeToStorage 采用 get → push → set 的非原子读-改-写，
+    // 高频并发调用（切换空间时几十条日志同时写入）会互相覆盖、
+    // 使 splice 裁剪失效，导致 chrome.storage.local 配额爆炸、
+    // JSON.stringify 整个数组的内存峰值激增，偶发浏览器崩溃。
+    // 如需恢复持久化，请改用内存缓冲 + 批量落盘的原子写入方案。
+    // await this.writeToStorage(logEntry);
   }
 
   /**

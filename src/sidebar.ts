@@ -51,7 +51,7 @@ async function waitForChromeApiReady(timeout = 10000): Promise<boolean> {
 /**
  * Initialize the application
  */
-async function initializeApp(): Promise<void> {
+export async function initializeApp(): Promise<void> {
   try {
     logger.info('App', 'Initializing Archrome sidebar');
 
@@ -97,6 +97,10 @@ async function initializeApp(): Promise<void> {
         if (!uiManager) {
           uiManager = new UIManager();
         }
+        // 重试路径必须重新注册 tab 事件监听器。
+        // 首次初始化失败时 setupTabEventListeners() 不会被执行，
+        // 若此处遗漏，扩展在唤醒/冷启动场景下会静默停止跟踪标签页变更。
+        setupTabEventListeners();
         uiManager.updateState();
         logger.info('App', 'Retry successful');
       } catch (retryError) {

@@ -233,6 +233,13 @@ body {
   border: 2px dashed var(--primary-color) !important;
 }
 
+/* Drop-target highlight applied to the list container itself (e.g. pin/bookmarks) */
+.item-list.drag-over {
+  background: var(--bg-secondary) !important;
+  border: 2px dashed var(--primary-color) !important;
+  border-radius: var(--radius-md);
+}
+
 .item-list li.disabled {
   opacity: 0.5;
   pointer-events: none;

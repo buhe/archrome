@@ -22,12 +22,16 @@ const { spaceManager, bookmarkManager, storageManager } = vi.hoisted(() => ({
     reloadBookmarks: vi.fn(async () => undefined),
     moveTabToSpace: vi.fn(async () => true),
     removeTabFromSpace: vi.fn(async () => undefined),
+    loadPinnedBookmarks: vi.fn(async () => undefined),
   },
   bookmarkManager: {
     onBookmarkChanged: vi.fn(),
     deleteBookmark: vi.fn(async () => true),
     getFolderBookmarks: vi.fn(async () => []),
     createBookmark: vi.fn(async () => null),
+    getPinFolder: vi.fn(async () => null),
+    getBookmarksBar: vi.fn(async () => null),
+    createFolder: vi.fn(async () => null),
   },
   storageManager: {
     getTheme: vi.fn(async () => null),
@@ -189,6 +193,15 @@ describe('UIManager', () => {
       });
     });
 
+    it('deletes a pinned bookmark and reloads the pin list', async () => {
+      ui.renderPinnedBookmarks([{ id: 'p1', title: 'P', url: 'https://p.com' } as BookmarkData]);
+      (document.querySelector('#pinned-list .delete-btn') as HTMLElement).click();
+      await vi.waitFor(() => {
+        expect(bookmarkManager.deleteBookmark).toHaveBeenCalledWith('p1');
+      });
+      expect(spaceManager.loadPinnedBookmarks).toHaveBeenCalled();
+    });
+
     it('removes the tab from the space when closing fails', async () => {
       vi.spyOn(chrome.tabs, 'remove').mockRejectedValueOnce(new Error('nope'));
       spaceManager.getCurrentSpaceId.mockReturnValue('1');
@@ -311,6 +324,61 @@ describe('UIManager', () => {
 
     it('getLogViewer returns the log viewer instance', () => {
       expect(ui.getLogViewer()).toBeTruthy();
+    });
+  });
+
+  describe('drop to pin', () => {
+    function dispatchDrop(payload: unknown) {
+      const ul = document.getElementById('pinned-list')!;
+      const dataTransfer = {
+        getData: vi.fn(() => JSON.stringify(payload)),
+        dropEffect: 'none',
+      };
+      const evt = new Event('drop', { bubbles: true }) as DragEvent;
+      Object.defineProperty(evt, 'dataTransfer', { value: dataTransfer });
+      Object.defineProperty(evt, 'preventDefault', { value: vi.fn() });
+      ul.dispatchEvent(evt);
+      return evt;
+    }
+
+    it('creates the bookmark in the existing pin folder and closes the tab', async () => {
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+      bookmarkManager.getPinFolder.mockResolvedValueOnce({ id: 'pin1', title: 'pin' });
+
+      dispatchDrop({ id: '50', title: 'T', url: 'https://t.com' });
+      await vi.waitFor(() => {
+        expect(chrome.tabs.remove).toHaveBeenCalledWith(50);
+      });
+
+      expect(bookmarkManager.createBookmark).toHaveBeenCalledWith('pin1', 'T', 'https://t.com');
+      expect(spaceManager.loadPinnedBookmarks).toHaveBeenCalled();
+      expect(spaceManager.removeTabFromSpace).toHaveBeenCalledWith('1', 50);
+      expect(bookmarkManager.createFolder).not.toHaveBeenCalled();
+    });
+
+    it('creates the pin folder when it does not exist yet', async () => {
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+      bookmarkManager.getPinFolder.mockResolvedValueOnce(null);
+      bookmarkManager.getBookmarksBar.mockResolvedValueOnce({ id: 'bar1', title: '' });
+      bookmarkManager.createFolder.mockResolvedValueOnce({ id: 'newpin', title: 'pin' });
+
+      dispatchDrop({ id: '51', title: 'N', url: 'https://n.com' });
+      await vi.waitFor(() => {
+        expect(bookmarkManager.createFolder).toHaveBeenCalledWith('bar1', 'pin');
+      });
+      expect(bookmarkManager.createBookmark).toHaveBeenCalledWith('newpin', 'N', 'https://n.com');
+    });
+
+    it('does nothing when the bookmarks bar is unavailable and no pin folder exists', async () => {
+      bookmarkManager.getPinFolder.mockResolvedValueOnce(null);
+      bookmarkManager.getBookmarksBar.mockResolvedValueOnce(null);
+
+      dispatchDrop({ id: '52', title: 'X', url: 'https://x.com' });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(bookmarkManager.createBookmark).not.toHaveBeenCalled();
+      expect(bookmarkManager.createFolder).not.toHaveBeenCalled();
+      expect(chrome.tabs.remove).not.toHaveBeenCalled();
     });
   });
 });

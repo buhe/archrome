@@ -75,7 +75,14 @@ export class ListItemComponent {
 
     // Add click handler
     li.addEventListener('click', (e) => {
-      if (!(e.target as HTMLElement).classList.contains('delete-btn')) {
+      // Walk the full event path so a click on the delete button's text node
+      // (e.g. the "✕" character) is still recognised and does not trigger
+      // navigation. The delete button also calls stopPropagation, but this
+      // guard is a defence-in-depth for cases where the target is a child node.
+      const hitDelete = e.composedPath().some(
+        (el) => el instanceof HTMLElement && el.classList.contains('delete-btn'),
+      );
+      if (!hitDelete) {
         this.options.onClick(this.options.data);
       }
     });

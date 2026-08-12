@@ -294,7 +294,14 @@ body {
   font-size: 0.7rem;
   font-weight: 500;
   line-height: 1;
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Always present in the layout and clickable. We only toggle opacity for the
+     reveal-on-hover effect. Keeping the button interactive at all times avoids
+     races where a click falls through to the <li> (navigation) because the
+     button was momentarily display:none / pointer-events:none. */
+  opacity: 0;
   transition: var(--transition);
   box-shadow: var(--shadow-sm);
 }
@@ -310,9 +317,7 @@ body {
 }
 
 .item-list li:hover .delete-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  opacity: 1;
 }
 
 /* Favicon */

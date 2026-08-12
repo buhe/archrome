@@ -35,6 +35,8 @@ export class UIManager {
     this.pinnedList = new ListComponent({
       containerId: 'pinned-list',
       emptyMessage: 'No pinned bookmarks found in "pin" folder.',
+      allowDrop: true,
+      onDrop: this.handleTabDropToPin.bind(this),
     });
 
     this.bookmarksList = new ListComponent({
@@ -208,7 +210,8 @@ export class UIManager {
       return new ListItemComponent({
         data,
         onClick: this.handleBookmarkClick.bind(this),
-        showDeleteButton: false,
+        onDelete: this.handlePinnedBookmarkDelete.bind(this),
+        showDeleteButton: true,
       });
     });
   }
@@ -454,6 +457,16 @@ export class UIManager {
   }
 
   /**
+   * Handle pinned bookmark delete
+   */
+  private async handlePinnedBookmarkDelete(data: ListItemData): Promise<void> {
+    await bookmarkManager.deleteBookmark(data.id.toString());
+
+    await spaceManager.loadPinnedBookmarks();
+    this.renderPinnedBookmarks(spaceManager.getPinnedBookmarks());
+  }
+
+  /**
    * Handle tab click
    */
   private handleTabClick(data: ListItemData): void {
@@ -542,6 +555,47 @@ export class UIManager {
       });
     }
     await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
+  }
+
+  /**
+   * Handle tab drop onto the pinned section (drag and drop to pin folder)
+   */
+  private async handleTabDropToPin(data: ListItemData): Promise<void> {
+    // Resolve the pin folder, creating it if it doesn't exist yet
+    let pinFolder = await bookmarkManager.getPinFolder();
+    if (!pinFolder) {
+      const bookmarkBar = await bookmarkManager.getBookmarksBar();
+      if (!bookmarkBar) {
+        logger.warn('UIManager', 'Cannot drop to pin: bookmarks bar not available');
+        return;
+      }
+      pinFolder = await bookmarkManager.createFolder(bookmarkBar.id, 'pin');
+      if (!pinFolder) {
+        logger.warn('UIManager', 'Cannot drop to pin: failed to create pin folder');
+        return;
+      }
+    }
+
+    // Create the bookmark inside the pin folder
+    await bookmarkManager.createBookmark(pinFolder.id, data.title, data.url);
+
+    // Refresh pinned bookmarks
+    await spaceManager.loadPinnedBookmarks();
+    this.renderPinnedBookmarks(spaceManager.getPinnedBookmarks());
+
+    // Close the tab and remove it from its space (mirrors handleTabDrop)
+    try {
+      await chrome.tabs.remove(Number(data.id));
+    } catch (error) {
+      logger.warn('UIManager', 'Error closing tab after drop to pin', {
+        tabId: data.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const currentSpaceId = spaceManager.getCurrentSpaceId();
+    if (currentSpaceId) {
+      await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
+    }
   }
 
   /**

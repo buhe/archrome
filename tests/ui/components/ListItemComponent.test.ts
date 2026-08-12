@@ -44,6 +44,25 @@ describe('ListItemComponent', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('does not navigate when clicking the delete button text node', () => {
+    const data: TabData = { id: 3, url: 'https://x.com', title: 'X', favIconUrl: null };
+    const onClick = vi.fn();
+    const onDelete = vi.fn();
+
+    const item = new ListItemComponent({ data, onClick, onDelete, showDeleteButton: true });
+    const deleteBtn = item.getElement().querySelector('.delete-btn') as HTMLElement;
+
+    // Simulate a click whose target is the "✕" text node inside the button,
+    // which previously fooled the classList check on e.target and leaked
+    // through to the row's onClick (navigation).
+    const textNode = deleteBtn.firstChild as Text;
+    expect(textNode).toBeTruthy();
+    deleteBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(onDelete).toHaveBeenCalledWith(data);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
   it('fires the context menu handler on right-click', () => {
     const data: TabData = { id: 2, url: 'https://a.com', title: 'A', favIconUrl: null };
     const onContextMenu = vi.fn();

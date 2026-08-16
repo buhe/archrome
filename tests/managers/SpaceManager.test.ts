@@ -122,6 +122,8 @@ describe('SpaceManager', () => {
   });
 
   describe('tab management', () => {
+    // Note: switching to an empty space creates a new tab page placeholder
+    // tab, so openTabs starts with one placeholder entry after switchSpace.
     it('addTabToCurrentSpace tracks a new tab and emits TABS_UPDATED', async () => {
       const space = await sm.createSpace('Work');
       await sm.switchSpace(space!.id);
@@ -130,7 +132,8 @@ describe('SpaceManager', () => {
       sm.on(EventType.TABS_UPDATED, listener);
 
       await sm.addTabToCurrentSpace({ id: 50, url: 'https://x.com', title: 'X' } as chrome.tabs.Tab);
-      expect(sm.getCurrentSpace()?.openTabs).toHaveLength(1);
+      expect(sm.getCurrentSpace()?.openTabs).toHaveLength(2); // placeholder + tab 50
+      expect(sm.getCurrentSpace()?.openTabs.some((t) => t.id === 50)).toBe(true);
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
@@ -146,7 +149,7 @@ describe('SpaceManager', () => {
       const tab = { id: 50, url: 'https://x.com', title: 'X' } as chrome.tabs.Tab;
       await sm.addTabToCurrentSpace(tab);
       await sm.addTabToCurrentSpace(tab); // duplicate id
-      expect(sm.getCurrentSpace()?.openTabs).toHaveLength(1);
+      expect(sm.getCurrentSpace()?.openTabs).toHaveLength(2); // placeholder + tab 50
     });
 
     it('removeTabFromSpace removes a tab and persists', async () => {
@@ -154,7 +157,7 @@ describe('SpaceManager', () => {
       await sm.switchSpace(space!.id);
       await sm.addTabToCurrentSpace({ id: 50, url: 'https://x.com', title: 'X' } as chrome.tabs.Tab);
       await sm.removeTabFromSpace(space!.id, 50);
-      expect(sm.getCurrentSpace()?.openTabs).toHaveLength(0);
+      expect(sm.getCurrentSpace()?.openTabs).toHaveLength(1); // placeholder remains
     });
 
     it('removeTabFromSpace is a no-op for an unknown space or tab', async () => {
@@ -168,7 +171,7 @@ describe('SpaceManager', () => {
       await sm.switchSpace(space!.id);
       await sm.addTabToCurrentSpace({ id: 50, url: 'https://x.com', title: 'X' } as chrome.tabs.Tab);
       await sm.updateTabInSpace(space!.id, { id: 50, url: 'https://y.com', title: 'Y' } as chrome.tabs.Tab);
-      expect(sm.getCurrentSpace()?.openTabs[0].title).toBe('Y');
+      expect(sm.getCurrentSpace()?.openTabs.find((t) => t.id === 50)?.title).toBe('Y');
     });
 
     it('moveTabToSpace moves a tab between spaces', async () => {
@@ -179,8 +182,8 @@ describe('SpaceManager', () => {
 
       const ok = await sm.moveTabToSpace(50, a.id, b.id);
       expect(ok).toBe(true);
-      expect(sm.getSpace(a.id)?.openTabs).toHaveLength(0);
-      expect(sm.getSpace(b.id)?.openTabs).toHaveLength(1);
+      expect(sm.getSpace(a.id)?.openTabs).toHaveLength(1); // placeholder remains
+      expect(sm.getSpace(b.id)?.openTabs.some((t) => t.id === 50)).toBe(true);
     });
 
     it('moveTabToSpace returns false for unknown spaces or tabs', async () => {
@@ -221,6 +224,81 @@ describe('SpaceManager', () => {
       ];
       await sm.switchSpace(a.id);
       expect(sm.getCurrentSpaceId()).toBe(a.id);
+    });
+
+    it('switchSpace to an empty space creates an inactive new tab page placeholder', async () => {
+      const a = (await sm.createSpace('Empty'))!;
+      await sm.switchSpace(a.id);
+
+      expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome://newtab', active: false });
+      expect(sm.getCurrentSpaceId()).toBe(a.id);
+    });
+
+    it('switchSpace creates new tabs BEFORE closing old tabs (window must never be emptied)', async () => {
+      const a = (await sm.createSpace('A'))!;
+      const b = (await sm.createSpace('B'))!;
+      // A tracks a live tab (id 7)
+      (a as Space).openTabs = [{ id: 7, url: 'https://old.com', title: 'Old', favIconUrl: null }];
+      chrome.tabs.get.mockResolvedValue({ id: 7, url: 'https://old.com', title: 'Old' });
+      chrome.tabs.query.mockResolvedValue([{ id: 7, url: 'https://old.com', title: 'Old' }]);
+      await sm.switchSpace(a.id); // A becomes current, tab 7 stays open
+
+      await sm.switchSpace(b.id); // B is empty -> placeholder, then close old tab
+
+      // The new tab must be created before the old tab is removed, otherwise
+      // closing the window's last tab would close the window itself.
+      const createOrder = chrome.tabs.create.mock.invocationCallOrder.at(-1);
+      const removeOrder = chrome.tabs.remove.mock.invocationCallOrder[0];
+      expect(createOrder).toBeDefined();
+      expect(removeOrder).toBeDefined();
+      expect(createOrder).toBeLessThan(removeOrder);
+    });
+
+    it('switchSpace records closed tabs for the late-onRemoved grace window', async () => {
+      const a = (await sm.createSpace('A'))!;
+      const b = (await sm.createSpace('B'))!;
+      (a as Space).openTabs = [{ id: 7, url: 'https://old.com', title: 'Old', favIconUrl: null }];
+      chrome.tabs.get.mockResolvedValue({ id: 7, url: 'https://old.com', title: 'Old' });
+      chrome.tabs.query.mockResolvedValue([{ id: 7, url: 'https://old.com', title: 'Old' }]);
+      await sm.switchSpace(a.id); // A becomes current, tab 7 stays open
+
+      expect(sm.isTabClosedDuringSwitch(7)).toBe(false);
+      await sm.switchSpace(b.id);
+      expect(sm.isTabClosedDuringSwitch(7)).toBe(true); // recorded on close
+      expect(sm.isTabClosedDuringSwitch(999)).toBe(false); // unrelated id
+    });
+
+    it('switchSpace aborts without closing old tabs when nothing can be restored', async () => {
+      const a = (await sm.createSpace('A'))!;
+      const b = (await sm.createSpace('B'))!;
+      await sm.switchSpace(a.id); // A becomes current (placeholder tab created)
+
+      // The old space must have a closable tab so the assertion is meaningful
+      const oldTabId = sm.getSpace(a.id)!.openTabs[0].id;
+      chrome.tabs.query.mockResolvedValue([{ id: oldTabId, url: 'about:blank', title: '' }]);
+
+      // Make every tab creation fail (restores and the placeholder)
+      chrome.tabs.create.mockRejectedValue(new Error('create failed'));
+
+      await sm.switchSpace(b.id);
+
+      // Old tabs must be untouched and the current space rolled back
+      expect(chrome.tabs.remove).not.toHaveBeenCalled();
+      expect(sm.getCurrentSpaceId()).toBe(a.id);
+    });
+
+    it('createAndSwitchSpace holds isCreatingSpace across the whole flow', async () => {
+      const observed: boolean[] = [];
+      // SPACE_CHANGED fires inside switchSpace, i.e. before the outer
+      // createAndSwitchSpace flow has finished — the flag must still be set.
+      sm.on(EventType.SPACE_CHANGED, () => observed.push(sm.isCreatingSpace()));
+
+      const space = await sm.createAndSwitchSpace('Hold');
+
+      expect(space).not.toBeNull();
+      expect(observed.length).toBeGreaterThan(0);
+      expect(observed.every(Boolean)).toBe(true); // flag held during the switch
+      expect(sm.isCreatingSpace()).toBe(false); // released afterwards
     });
 
     it('triggerSwitch debounces switches', async () => {

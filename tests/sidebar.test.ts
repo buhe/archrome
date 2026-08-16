@@ -21,6 +21,7 @@ const { spaceManager, tabManager, UIManagerMock, delayMock } = vi.hoisted(() => 
     initialize: vi.fn(),
     on: vi.fn(),
     isSwitching: vi.fn(() => false),
+    isTabClosedDuringSwitch: vi.fn(() => false),
     getCurrentSpaceId: vi.fn(() => null),
     getCurrentSpace: vi.fn(() => null),
     getSpace: vi.fn(() => null),

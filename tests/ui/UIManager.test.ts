@@ -15,6 +15,8 @@ const { spaceManager, bookmarkManager, storageManager } = vi.hoisted(() => ({
     getSpaces: vi.fn(() => []),
     getPinnedBookmarks: vi.fn(() => []),
     isSwitching: vi.fn(() => false),
+    isCreatingSpace: vi.fn(() => false),
+    isTabClosedDuringSwitch: vi.fn(() => false),
     triggerSwitch: vi.fn(),
     switchSpace: vi.fn(async () => undefined),
     createAndSwitchSpace: vi.fn(async () => ({ id: '9', icon: '●', name: 'NewSpace', bookmarks: [], openTabs: [] })),
@@ -129,7 +131,6 @@ describe('UIManager', () => {
     });
 
     it('opens a delete context menu on right-click and deletes when confirmed', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       ui.renderSpaces([{ id: '1', icon: '😀', name: 'Work', bookmarks: [], openTabs: [] }], null);
       const li = document.querySelector('#spaces-list li') as HTMLElement;
       li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
@@ -138,17 +139,27 @@ describe('UIManager', () => {
       expect(item).toBeTruthy();
       item.click();
 
+      // Confirmation now uses the in-panel dialog instead of window.confirm
+      await vi.waitFor(() => {
+        expect(document.querySelector('.dialog-overlay')).toBeTruthy();
+      });
+      (document.querySelector('.dialog-overlay .dialog-btn-primary') as HTMLElement).click();
+
       await vi.waitFor(() => {
         expect(spaceManager.deleteSpace).toHaveBeenCalledWith('1');
       });
     });
 
     it('does not delete when confirmation is dismissed', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
       ui.renderSpaces([{ id: '1', icon: '😀', name: 'Work', bookmarks: [], openTabs: [] }], null);
       const li = document.querySelector('#spaces-list li') as HTMLElement;
       li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
       (document.querySelector('.custom-context-menu .context-menu-item') as HTMLElement).click();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('.dialog-overlay')).toBeTruthy();
+      });
+      (document.querySelector('.dialog-overlay .dialog-btn:not(.dialog-btn-primary)') as HTMLElement).click();
       await new Promise((r) => setTimeout(r, 0));
       expect(spaceManager.deleteSpace).not.toHaveBeenCalled();
     });
@@ -269,9 +280,19 @@ describe('UIManager', () => {
       expect(spaceManager.reloadBookmarks).not.toHaveBeenCalled();
     });
 
+    it('handleBookmarkChanged skips reload while creating a space', async () => {
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => Promise<void>;
+      // Bookmark events from space creation arrive while no switch runs yet
+      spaceManager.isSwitching.mockReturnValue(false);
+      spaceManager.isCreatingSpace.mockReturnValue(true);
+      await cb();
+      expect(spaceManager.reloadBookmarks).not.toHaveBeenCalled();
+    });
+
     it('handleBookmarkChanged reloads bookmarks when idle', async () => {
       const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => Promise<void>;
       spaceManager.isSwitching.mockReturnValue(false);
+      spaceManager.isCreatingSpace.mockReturnValue(false);
       spaceManager.getCurrentSpace.mockReturnValue(SPACE);
       spaceManager.getSpaces.mockReturnValue([SPACE]);
       spaceManager.getCurrentSpaceId.mockReturnValue('1');
@@ -282,17 +303,31 @@ describe('UIManager', () => {
   });
 
   describe('new space / theme / state', () => {
-    it('creates a new space from the prompt', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('NewSpace');
+    it('creates a new space from the in-panel prompt dialog', async () => {
       (document.querySelector('.new-space-btn') as HTMLElement).click();
+
+      // The in-panel dialog replaces window.prompt
+      await vi.waitFor(() => {
+        expect(document.querySelector('.dialog-overlay .dialog-input')).toBeTruthy();
+      });
+      const input = document.querySelector('.dialog-overlay .dialog-input') as HTMLInputElement;
+      input.value = 'NewSpace';
+      (document.querySelector('.dialog-overlay .dialog-btn-primary') as HTMLElement).click();
+
       await vi.waitFor(() => {
         expect(spaceManager.createAndSwitchSpace).toHaveBeenCalledWith('NewSpace');
       });
     });
 
     it('aborts creating a space when the prompt is empty', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('');
       (document.querySelector('.new-space-btn') as HTMLElement).click();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('.dialog-overlay .dialog-input')).toBeTruthy();
+      });
+      const input = document.querySelector('.dialog-overlay .dialog-input') as HTMLInputElement;
+      input.value = '';
+      (document.querySelector('.dialog-overlay .dialog-btn-primary') as HTMLElement).click();
       await new Promise((r) => setTimeout(r, 0));
       expect(spaceManager.createAndSwitchSpace).not.toHaveBeenCalled();
     });

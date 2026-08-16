@@ -9,7 +9,7 @@ import { spaceManager } from '@managers/index';
 import { bookmarkManager } from '@managers/index';
 import { tabManager } from '@managers/index';
 import { storageManager } from '@managers/index';
-import { ListItemComponent, ListComponent, ContextMenu, LogViewer } from './components';
+import { ListItemComponent, ListComponent, ContextMenu, LogViewer, DialogManager } from './components';
 import type { ListItemData } from './components/ListItemComponent';
 import { isEmoji, getFaviconUrl, getDisplayText } from '@utils/index';
 import { logger } from '@utils/index';
@@ -23,6 +23,7 @@ export class UIManager {
   private tabsList: ListComponent;
   private spacesList: HTMLElement;
   private logViewer: LogViewer;
+  private dialogs: DialogManager;
   private newSpaceBtn: HTMLElement;
   private themeToggleBtn: HTMLElement;
   private debugBtn: HTMLElement;
@@ -63,6 +64,14 @@ export class UIManager {
       bodyId: 'log-viewer-body',
       metricsTableId: 'metrics-table',
       filterId: 'log-filter',
+    });
+
+    // Initialize in-panel dialogs (native prompt/alert/confirm are not
+    // reliably supported in the side panel and can crash it)
+    this.dialogs = new DialogManager();
+    this.logViewer.setDialogs({
+      confirm: (message) => this.dialogs.confirm(message),
+      notify: (message) => this.dialogs.toast(message),
     });
 
     // Setup event listeners
@@ -324,20 +333,21 @@ export class UIManager {
       bookmarkCount > 0
         ? `\n\nThis space contains ${bookmarkCount} bookmark${bookmarkCount === 1 ? '' : 's'}, which will also be deleted.`
         : '';
-    const confirmed = confirm(
+    const confirmed = await this.dialogs.confirm(
       `Delete space "${space.name}"?${bookmarkWarning}\n\nThis cannot be undone.`,
+      { okLabel: 'Delete', danger: true },
     );
     if (!confirmed) return;
 
     try {
       if (spaceManager.isSwitching()) {
-        alert('A space operation is already in progress. Please wait.');
+        this.dialogs.toast('A space operation is already in progress. Please wait.');
         return;
       }
 
       const success = await spaceManager.deleteSpace(space.id);
       if (!success) {
-        alert('Failed to delete space. Check console for details.');
+        this.dialogs.toast('Failed to delete space. Check console for details.', 5000);
       }
     } catch (error) {
       logger.error('UIManager', 'Error deleting space', {
@@ -345,7 +355,7 @@ export class UIManager {
         spaceName: space.name,
         error: error instanceof Error ? error.message : String(error),
       });
-      alert('Error deleting space. Please try again.');
+      this.dialogs.toast('Error deleting space. Please try again.', 5000);
     }
   }
 
@@ -412,9 +422,11 @@ export class UIManager {
    * Handle bookmark changed (external change)
    */
   private async handleBookmarkChanged(): Promise<void> {
-    // Skip reload if currently switching spaces to avoid conflicts
-    if (spaceManager.isSwitching()) {
-      logger.debug('UIManager', 'Skipping bookmark reload during space switch');
+    // Skip reload if currently switching or creating spaces to avoid conflicts.
+    // Bookmark events fired by space creation arrive asynchronously and can
+    // land while no switch is running yet.
+    if (spaceManager.isSwitching() || spaceManager.isCreatingSpace()) {
+      logger.debug('UIManager', 'Skipping bookmark reload during space operation');
       return;
     }
 
@@ -602,27 +614,33 @@ export class UIManager {
    * Handle new space button click
    */
   private async handleNewSpace(): Promise<void> {
-    const name = prompt('Enter name for the new space:');
+    const name = await this.dialogs.prompt('Enter name for the new space:');
     if (!name || name.trim() === '') return;
 
     try {
       // Check if space manager is already switching
       if (spaceManager.isSwitching()) {
-        alert('A space operation is already in progress. Please wait.');
+        this.dialogs.toast('A space operation is already in progress. Please wait.');
         return;
       }
 
       // Use atomic create and switch to prevent conflicts
       const space = await spaceManager.createAndSwitchSpace(name.trim());
       if (!space) {
-        alert('Error creating new space. A space with this name may already exist. Check console for details.');
+        this.dialogs.toast(
+          'Error creating new space. A space with this name may already exist. Check console for details.',
+          5000,
+        );
       }
     } catch (error) {
       logger.error('UIManager', 'Error creating new space', {
         name: name.trim(),
         error: error instanceof Error ? error.message : String(error),
       });
-      alert('Error creating new space. The Chrome APIs may not be ready yet. Please try again.');
+      this.dialogs.toast(
+        'Error creating new space. The Chrome APIs may not be ready yet. Please try again.',
+        5000,
+      );
     }
   }
 
@@ -714,6 +732,7 @@ export class UIManager {
    */
   destroy(): void {
     this.closeContextMenu();
+    this.dialogs.destroy();
     this.pinnedList.destroy();
     this.bookmarksList.destroy();
     this.tabsList.destroy();

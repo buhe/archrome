@@ -141,6 +141,13 @@ function setupTabEventListeners(): void {
       return; // Do nothing during a space switch
     }
 
+    // Tabs closed by a space switch can emit onRemoved events that arrive
+    // after the switch finished; those tabs must stay in their space's
+    // stored data so they can be restored when switching back.
+    if (spaceManager.isTabClosedDuringSwitch(tabId)) {
+      return;
+    }
+
     const currentSpaceId = spaceManager.getCurrentSpaceId();
     if (currentSpaceId) {
       await spaceManager.removeTabFromSpace(currentSpaceId, tabId);

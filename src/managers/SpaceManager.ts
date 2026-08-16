@@ -24,6 +24,13 @@ interface SpaceManagerState {
 }
 
 /**
+ * How long a tab closed by a space switch stays "recently closed".
+ * Late-arriving onRemoved events within this window must not purge the tab
+ * from its space's stored data — that data is what restores the old space.
+ */
+const RECENTLY_CLOSED_GRACE_MS = 10000;
+
+/**
  * Space Manager class
  */
 export class SpaceManager {
@@ -32,6 +39,7 @@ export class SpaceManager {
   private eventListeners: Map<EventType, Set<EventListener>>;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private debounceSwitch: (spaceId: string) => void;
+  private recentlyClosedTabIds: Map<number, number> = new Map();
 
   constructor() {
     this.state = {
@@ -211,31 +219,45 @@ export class SpaceManager {
         previousSpaceId: oldSpaceId ?? undefined,
       });
 
-      // Step 1: Close old space tabs
+      // Step 1: Restore new space tabs FIRST (inactive). The window must
+      // always keep at least one tab: closing the old tabs before the new
+      // ones exist can close the window — and the side panel with it — when
+      // the old space held the window's last tracked tabs.
+      let restoredTabs: chrome.tabs.Tab[] = [];
+      if (newSpace.openTabs && newSpace.openTabs.length > 0) {
+        restoredTabs = await this.restoreNewSpaceTabs(newSpace);
+      }
+
+      // Fall back to a new tab page placeholder when nothing could be
+      // restored (freshly created or empty space). createTab normally
+      // rejects internal chrome:// URLs, so allowInternal is required here.
+      if (restoredTabs.length === 0) {
+        const placeholder = await tabManager.createTab('chrome://newtab', false, {
+          allowInternal: true,
+        });
+        if (placeholder) {
+          restoredTabs = [placeholder];
+        }
+      }
+
+      // Safety net: if the new space ended up with no tabs at all, abort
+      // the switch without closing the old tabs — closing them could close
+      // the window.
+      if (restoredTabs.length === 0) {
+        throw new Error('No tabs could be restored for the new space; keeping old space tabs');
+      }
+
+      // Step 2: Close old space tabs
       let closedTabCount = 0;
       if (oldSpace && oldSpace.openTabs.length > 0) {
         closedTabCount = await this.closeOldSpaceTabs(oldSpace);
       }
 
-      // Step 2: Restore new space tabs
-      let restoredTabs: chrome.tabs.Tab[] = [];
-      if (newSpace.openTabs && newSpace.openTabs.length > 0) {
-        restoredTabs = await this.restoreNewSpaceTabs(newSpace);
-      } else {
-        // Create empty tab if space has no tabs
-        const newTab = await tabManager.createTab('about:blank', true);
-        if (newTab) {
-          restoredTabs = [newTab];
-        }
-      }
-
       // Update space with restored tabs
       newSpace.openTabs = restoredTabs.map((tab) => tabManager.chromeTabToTabData(tab));
 
-      // Activate first tab if available
-      if (restoredTabs.length > 0) {
-        await tabManager.updateTab(restoredTabs[0].id, { active: true });
-      }
+      // Step 3: Activate first restored tab
+      await tabManager.updateTab(restoredTabs[0].id, { active: true });
 
       // Store and emit
       await storageManager.storeTabsImmediate(newSpaceId, newSpace.openTabs);
@@ -311,6 +333,15 @@ export class SpaceManager {
         tabsToClose: tabsToClose.length,
       });
 
+      // Record ids before closing: onRemoved events for these tabs may be
+      // delivered after the switch has finished (isSwitching is already
+      // false again), and the sidebar handler must not purge them from the
+      // space's stored tabs.
+      const closedAt = Date.now();
+      for (const tab of tabsToClose) {
+        this.recentlyClosedTabIds.set(tab.id, closedAt);
+      }
+
       const closedCount = await tabManager.closeTabsBatch(tabsToClose.map((t) => t.id));
 
       logger.info('SpaceManager', 'Old space tabs closed', {
@@ -378,41 +409,37 @@ export class SpaceManager {
         return null;
       }
 
-      // Set creating flag to prevent bookmark reload conflicts
-      this.state.isCreatingSpace = true;
+      // Note: the isCreatingSpace flag is managed by createAndSwitchSpace so
+      // it covers the whole flow, including the asynchronous bookmark events
+      // that fire after this method returns.
 
-      try {
-        const folder = await bookmarkManager.createFolder(bookmarkBar.id, name);
+      const folder = await bookmarkManager.createFolder(bookmarkBar.id, name);
 
-        if (!folder) {
-          throw new Error('Failed to create folder');
-        }
-
-        // Add to spaces
-        const spaceInfo = bookmarkManager.folderToSpace(folder);
-        const newSpace: Space = {
-          id: spaceInfo.id,
-          icon: spaceInfo.icon,
-          name: spaceInfo.name,
-          bookmarks: [],
-          openTabs: [],
-        };
-
-        this.state.spaces.push(newSpace);
-
-        logger.info('SpaceManager', 'Space created', { spaceId: newSpace.id, name });
-
-        this.emitEvent({
-          type: EventType.SPACE_CREATED,
-          timestamp: Date.now(),
-          space: newSpace,
-        });
-
-        return newSpace;
-      } finally {
-        // Reset creating flag
-        this.state.isCreatingSpace = false;
+      if (!folder) {
+        throw new Error('Failed to create folder');
       }
+
+      // Add to spaces
+      const spaceInfo = bookmarkManager.folderToSpace(folder);
+      const newSpace: Space = {
+        id: spaceInfo.id,
+        icon: spaceInfo.icon,
+        name: spaceInfo.name,
+        bookmarks: [],
+        openTabs: [],
+      };
+
+      this.state.spaces.push(newSpace);
+
+      logger.info('SpaceManager', 'Space created', { spaceId: newSpace.id, name });
+
+      this.emitEvent({
+        type: EventType.SPACE_CREATED,
+        timestamp: Date.now(),
+        space: newSpace,
+      });
+
+      return newSpace;
     } catch (error) {
       logger.error('SpaceManager', 'Error creating space', {
         name,
@@ -427,6 +454,13 @@ export class SpaceManager {
    * This prevents conflicts between bookmark reload and space switch
    */
   async createAndSwitchSpace(name: string): Promise<Space | null> {
+    // Hold the creating flag across the whole flow (create + settle delay +
+    // switch). Bookmark events fired by the folder creation arrive
+    // asynchronously, typically after createSpace has returned; without this
+    // wider window they land while both isCreatingSpace and isSwitching are
+    // false and trigger a bookmark reload that races with the switch.
+    this.state.isCreatingSpace = true;
+
     try {
       const space = await this.createSpace(name);
       if (space) {
@@ -450,6 +484,8 @@ export class SpaceManager {
         error: error instanceof Error ? error.message : String(error),
       });
       return null;
+    } finally {
+      this.state.isCreatingSpace = false;
     }
   }
 
@@ -675,6 +711,25 @@ export class SpaceManager {
   }
 
   /**
+   * Check if currently creating a space
+   */
+  isCreatingSpace(): boolean {
+    return this.state.isCreatingSpace;
+  }
+
+  /**
+   * Check if a tab was closed by a space switch recently (grace window for
+   * late-arriving onRemoved events)
+   */
+  isTabClosedDuringSwitch(tabId: number): boolean {
+    const closedAt = this.recentlyClosedTabIds.get(tabId);
+    if (closedAt === undefined) {
+      return false;
+    }
+    return Date.now() - closedAt <= RECENTLY_CLOSED_GRACE_MS;
+  }
+
+  /**
    * Get current space ID
    */
   getCurrentSpaceId(): string | null {
@@ -825,6 +880,14 @@ export class SpaceManager {
     if (this.state.isCreatingSpace) {
       logger.warn('SpaceManager', 'Resetting stale creating state');
       this.state.isCreatingSpace = false;
+    }
+
+    // Expire recently-closed tab records past the grace window
+    const now = Date.now();
+    for (const [tabId, closedAt] of this.recentlyClosedTabIds) {
+      if (now - closedAt > RECENTLY_CLOSED_GRACE_MS) {
+        this.recentlyClosedTabIds.delete(tabId);
+      }
     }
 
     // Cleanup old storage data

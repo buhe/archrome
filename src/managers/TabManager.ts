@@ -94,8 +94,16 @@ export class TabManager {
 
   /**
    * Create a new tab
+   * `allowInternal` skips the isValidUrl check for intentionally internal
+   * pages (e.g. the new tab page placeholder for an empty space). The check
+   * must stay on for restores, but skipping it here is safe: chrome.tabs.create
+   * itself accepts chrome://newtab.
    */
-  async createTab(url: string, active = true): Promise<chrome.tabs.Tab | null> {
+  async createTab(
+    url: string,
+    active = true,
+    options?: { allowInternal?: boolean },
+  ): Promise<chrome.tabs.Tab | null> {
     try {
       // Ensure Chrome API is ready before creating tab
       if (!(await this.ensureChromeApiReady())) {
@@ -103,7 +111,7 @@ export class TabManager {
         return null;
       }
 
-      if (!isValidUrl(url)) {
+      if (!options?.allowInternal && !isValidUrl(url)) {
         logger.warn('TabManager', 'Invalid URL for tab creation', { url });
         return null;
       }

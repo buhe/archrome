@@ -228,11 +228,11 @@ export class SpaceManager {
         restoredTabs = await this.restoreNewSpaceTabs(newSpace);
       }
 
-      // Fall back to an about:blank placeholder when nothing could be
+      // Fall back to a new tab page placeholder when nothing could be
       // restored (freshly created or empty space). createTab normally
-      // rejects about: URLs, so allowInternal is required here.
+      // rejects internal chrome:// URLs, so allowInternal is required here.
       if (restoredTabs.length === 0) {
-        const placeholder = await tabManager.createTab('about:blank', false, {
+        const placeholder = await tabManager.createTab('chrome://newtab', false, {
           allowInternal: true,
         });
         if (placeholder) {

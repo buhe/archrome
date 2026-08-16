@@ -95,9 +95,9 @@ export class TabManager {
   /**
    * Create a new tab
    * `allowInternal` skips the isValidUrl check for intentionally internal
-   * pages (e.g. the about:blank placeholder for an empty space). The check
+   * pages (e.g. the new tab page placeholder for an empty space). The check
    * must stay on for restores, but skipping it here is safe: chrome.tabs.create
-   * itself accepts about:blank.
+   * itself accepts chrome://newtab.
    */
   async createTab(
     url: string,

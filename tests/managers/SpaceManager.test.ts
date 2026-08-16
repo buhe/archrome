@@ -122,7 +122,7 @@ describe('SpaceManager', () => {
   });
 
   describe('tab management', () => {
-    // Note: switching to an empty space creates an about:blank placeholder
+    // Note: switching to an empty space creates a new tab page placeholder
     // tab, so openTabs starts with one placeholder entry after switchSpace.
     it('addTabToCurrentSpace tracks a new tab and emits TABS_UPDATED', async () => {
       const space = await sm.createSpace('Work');
@@ -226,11 +226,11 @@ describe('SpaceManager', () => {
       expect(sm.getCurrentSpaceId()).toBe(a.id);
     });
 
-    it('switchSpace to an empty space creates an inactive about:blank placeholder', async () => {
+    it('switchSpace to an empty space creates an inactive new tab page placeholder', async () => {
       const a = (await sm.createSpace('Empty'))!;
       await sm.switchSpace(a.id);
 
-      expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'about:blank', active: false });
+      expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome://newtab', active: false });
       expect(sm.getCurrentSpaceId()).toBe(a.id);
     });
 

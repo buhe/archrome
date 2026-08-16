@@ -67,10 +67,10 @@ describe('TabManager', () => {
       expect(chrome.tabs.create).not.toHaveBeenCalled();
     });
 
-    it('creates about:blank when allowInternal is set (empty-space placeholder)', async () => {
-      const tab = await tm.createTab('about:blank', false, { allowInternal: true });
+    it('creates chrome://newtab when allowInternal is set (empty-space placeholder)', async () => {
+      const tab = await tm.createTab('chrome://newtab', false, { allowInternal: true });
       expect(tab).not.toBeNull();
-      expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'about:blank', active: false });
+      expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'chrome://newtab', active: false });
     });
 
     it('returns null on error', async () => {

@@ -62,6 +62,17 @@ describe('TabManager', () => {
       expect(await tm.createTab('chrome://settings')).toBeNull();
     });
 
+    it('rejects about:blank by default (restore path must skip internal pages)', async () => {
+      expect(await tm.createTab('about:blank')).toBeNull();
+      expect(chrome.tabs.create).not.toHaveBeenCalled();
+    });
+
+    it('creates about:blank when allowInternal is set (empty-space placeholder)', async () => {
+      const tab = await tm.createTab('about:blank', false, { allowInternal: true });
+      expect(tab).not.toBeNull();
+      expect(chrome.tabs.create).toHaveBeenCalledWith({ url: 'about:blank', active: false });
+    });
+
     it('returns null on error', async () => {
       vi.spyOn(chrome.tabs, 'create').mockRejectedValueOnce(new Error('x'));
       expect(await tm.createTab('https://example.com')).toBeNull();

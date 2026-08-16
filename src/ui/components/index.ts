@@ -6,3 +6,4 @@ export * from './ListItemComponent';
 export * from './ListComponent';
 export * from './ContextMenu';
 export * from './LogViewer';
+export * from './DialogManager';

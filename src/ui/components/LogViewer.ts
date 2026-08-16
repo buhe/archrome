@@ -15,6 +15,16 @@ export interface LogViewerOptions {
 }
 
 /**
+ * Dialog hooks injected by the UIManager.
+ * Falls back to native dialogs when not injected so the viewer stays usable
+ * standalone (e.g. in tests).
+ */
+export interface LogViewerDialogs {
+  confirm: (message: string) => Promise<boolean>;
+  notify: (message: string) => void;
+}
+
+/**
  * Log Viewer class
  */
 export class LogViewer {
@@ -23,6 +33,7 @@ export class LogViewer {
   private metricsTable: HTMLElement;
   private filter: HTMLSelectElement;
   private isOpen: boolean = false;
+  private dialogs: Partial<LogViewerDialogs> = {};
 
   constructor(options: LogViewerOptions) {
     this.modal = document.getElementById(options.modalId)!;
@@ -35,6 +46,35 @@ export class LogViewer {
     }
 
     this.setupEventListeners();
+  }
+
+  /**
+   * Inject in-panel dialog implementations (native alert/confirm are not
+   * reliably supported in the side panel)
+   */
+  setDialogs(dialogs: Partial<LogViewerDialogs>): void {
+    this.dialogs = dialogs;
+  }
+
+  /**
+   * Confirmation helper falling back to native confirm()
+   */
+  private async confirmAction(message: string): Promise<boolean> {
+    if (this.dialogs.confirm) {
+      return this.dialogs.confirm(message);
+    }
+    return confirm(message);
+  }
+
+  /**
+   * Notification helper falling back to native alert()
+   */
+  private notify(message: string): void {
+    if (this.dialogs.notify) {
+      this.dialogs.notify(message);
+      return;
+    }
+    alert(message);
   }
 
   /**
@@ -216,7 +256,7 @@ export class LogViewer {
       logger.error('LogViewer', 'Failed to export logs', {
         error: error instanceof Error ? error.message : String(error),
       });
-      alert('Failed to export logs: ' + (error instanceof Error ? error.message : String(error)));
+      this.notify('Failed to export logs: ' + (error instanceof Error ? error.message : String(error)));
     }
   }
 
@@ -224,7 +264,7 @@ export class LogViewer {
    * Clear all logs
    */
   private async clearLogs(): Promise<void> {
-    if (!confirm('Are you sure you want to clear all logs? This cannot be undone.')) {
+    if (!(await this.confirmAction('Are you sure you want to clear all logs? This cannot be undone.'))) {
       return;
     }
 

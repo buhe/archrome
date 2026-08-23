@@ -234,6 +234,7 @@ export class UIManager {
         data,
         onClick: this.handleBookmarkClick.bind(this),
         onDelete: this.handleBookmarkDelete.bind(this),
+        draggable: true,
         showDeleteButton: true,
       });
     });
@@ -588,25 +589,40 @@ export class UIManager {
       }
     }
 
-    // Create the bookmark inside the pin folder
-    await bookmarkManager.createBookmark(pinFolder.id, data.title, data.url);
+    // Create/move the bookmark inside the pin folder
+    if (typeof data.id === 'string') {
+      // Dropped an existing bookmark: move it into the pin folder
+      await bookmarkManager.moveBookmark(data.id, pinFolder.id);
+    } else {
+      // Dropped a tab: create a new bookmark
+      await bookmarkManager.createBookmark(pinFolder.id, data.title, data.url);
+
+      // Close the tab and remove it from its space (mirrors handleTabDrop)
+      try {
+        await chrome.tabs.remove(Number(data.id));
+      } catch (error) {
+        logger.warn('UIManager', 'Error closing tab after drop to pin', {
+          tabId: data.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      const currentSpaceId = spaceManager.getCurrentSpaceId();
+      if (currentSpaceId) {
+        await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
+      }
+    }
 
     // Refresh pinned bookmarks
     await spaceManager.loadPinnedBookmarks();
     this.renderPinnedBookmarks(spaceManager.getPinnedBookmarks());
 
-    // Close the tab and remove it from its space (mirrors handleTabDrop)
-    try {
-      await chrome.tabs.remove(Number(data.id));
-    } catch (error) {
-      logger.warn('UIManager', 'Error closing tab after drop to pin', {
-        tabId: data.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-    const currentSpaceId = spaceManager.getCurrentSpaceId();
-    if (currentSpaceId) {
-      await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
+    // If a bookmark was moved, refresh the current space's bookmark list too
+    if (typeof data.id === 'string') {
+      const currentSpace = spaceManager.getCurrentSpace();
+      if (currentSpace) {
+        currentSpace.bookmarks = currentSpace.bookmarks.filter((b) => b.id !== data.id);
+        this.renderBookmarks(currentSpace.bookmarks);
+      }
     }
   }
 

@@ -34,6 +34,7 @@ const { spaceManager, bookmarkManager, storageManager } = vi.hoisted(() => ({
     getPinFolder: vi.fn(async () => null),
     getBookmarksBar: vi.fn(async () => null),
     createFolder: vi.fn(async () => null),
+    moveBookmark: vi.fn(async () => true),
   },
   storageManager: {
     getTheme: vi.fn(async () => null),
@@ -380,7 +381,7 @@ describe('UIManager', () => {
       spaceManager.getCurrentSpaceId.mockReturnValue('1');
       bookmarkManager.getPinFolder.mockResolvedValueOnce({ id: 'pin1', title: 'pin' });
 
-      dispatchDrop({ id: '50', title: 'T', url: 'https://t.com' });
+      dispatchDrop({ id: 50, title: 'T', url: 'https://t.com' });
       await vi.waitFor(() => {
         expect(chrome.tabs.remove).toHaveBeenCalledWith(50);
       });
@@ -397,7 +398,7 @@ describe('UIManager', () => {
       bookmarkManager.getBookmarksBar.mockResolvedValueOnce({ id: 'bar1', title: '' });
       bookmarkManager.createFolder.mockResolvedValueOnce({ id: 'newpin', title: 'pin' });
 
-      dispatchDrop({ id: '51', title: 'N', url: 'https://n.com' });
+      dispatchDrop({ id: 51, title: 'N', url: 'https://n.com' });
       await vi.waitFor(() => {
         expect(bookmarkManager.createFolder).toHaveBeenCalledWith('bar1', 'pin');
       });
@@ -408,12 +409,31 @@ describe('UIManager', () => {
       bookmarkManager.getPinFolder.mockResolvedValueOnce(null);
       bookmarkManager.getBookmarksBar.mockResolvedValueOnce(null);
 
-      dispatchDrop({ id: '52', title: 'X', url: 'https://x.com' });
+      dispatchDrop({ id: 52, title: 'X', url: 'https://x.com' });
       await new Promise((r) => setTimeout(r, 0));
 
       expect(bookmarkManager.createBookmark).not.toHaveBeenCalled();
       expect(bookmarkManager.createFolder).not.toHaveBeenCalled();
       expect(chrome.tabs.remove).not.toHaveBeenCalled();
+    });
+
+    it('moves an existing bookmark into the pin folder without touching tabs', async () => {
+      bookmarkManager.getPinFolder.mockResolvedValueOnce({ id: 'pin1', title: 'pin' });
+      spaceManager.getCurrentSpace.mockReturnValue({
+        id: '1', icon: '◆', name: 'S1', bookmarks: [
+          { id: 'bm1', title: 'B', url: 'https://b.com' },
+        ], openTabs: [],
+      });
+
+      dispatchDrop({ id: 'bm1', title: 'B', url: 'https://b.com' });
+      await vi.waitFor(() => {
+        expect(bookmarkManager.moveBookmark).toHaveBeenCalledWith('bm1', 'pin1');
+      });
+
+      expect(bookmarkManager.createBookmark).not.toHaveBeenCalled();
+      expect(chrome.tabs.remove).not.toHaveBeenCalled();
+      expect(spaceManager.loadPinnedBookmarks).toHaveBeenCalled();
+      expect(document.querySelectorAll('#bookmarks-list .item-list-item').length).toBe(0);
     });
   });
 });

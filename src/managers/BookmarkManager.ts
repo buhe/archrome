@@ -95,7 +95,7 @@ export class BookmarkManager {
   async getSpaceFolders(): Promise<BookmarkTreeNode[]> {
     try {
       const bookmarkBar = await this.getBookmarksBar();
-      if (!bookmarkBar || !bookmarkBar.children) {
+      if (!bookmarkBar?.children) {
         return [];
       }
 
@@ -115,7 +115,7 @@ export class BookmarkManager {
   async getPinFolder(): Promise<BookmarkTreeNode | null> {
     try {
       const bookmarkBar = await this.getBookmarksBar();
-      if (!bookmarkBar || !bookmarkBar.children) {
+      if (!bookmarkBar?.children) {
         return null;
       }
 
@@ -238,7 +238,7 @@ export class BookmarkManager {
 
       // Check if a folder with the same name already exists
       const bookmarkBar = await this.getBookmarksBar();
-      if (bookmarkBar && bookmarkBar.children) {
+      if (bookmarkBar?.children) {
         const existingFolder = bookmarkBar.children.find(
           (node) => node.title === title && node.children !== undefined
         );

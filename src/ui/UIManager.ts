@@ -3,16 +3,16 @@
  * Handles rendering of bookmarks, tabs, spaces, and pinned items
  */
 
-import type { Space, BookmarkData, TabData, AppEvent, Theme, ContextMenuItem } from '@types/index';
-import { EventType } from '@types/index';
 import { spaceManager } from '@managers/index';
 import { bookmarkManager } from '@managers/index';
-import { tabManager } from '@managers/index';
 import { storageManager } from '@managers/index';
+import { EventType } from '@types/index';
+import type { Space, BookmarkData, TabData, AppEvent, Theme, ContextMenuItem } from '@types/index';
+import { isEmoji } from '@utils/index';
+import { logger } from '@utils/index';
+
 import { ListItemComponent, ListComponent, ContextMenu, LogViewer, DialogManager } from './components';
 import type { ListItemData } from './components/ListItemComponent';
-import { isEmoji, getFaviconUrl, getDisplayText } from '@utils/index';
-import { logger } from '@utils/index';
 
 /**
  * UI Manager class

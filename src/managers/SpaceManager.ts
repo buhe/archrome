@@ -3,13 +3,15 @@
  * Handles space loading, switching, and tab synchronization
  */
 
-import type { Space, TabData, BookmarkData, SwitchMetric, AppEvent, EventListener } from '@types/index';
+import type { Space, BookmarkData, SwitchMetric, AppEvent, EventListener } from '@types/index';
 import { EventType, SwitchStatus, DEFAULT_CONFIG } from '@types/index';
-import { storageManager } from './StorageManager';
-import { bookmarkManager } from './BookmarkManager';
-import { tabManager } from './TabManager';
-import { debounce, formatDuration, delay } from '@utils/index';
+import { debounce, delay } from '@utils/index';
 import { logger } from '@utils/index';
+
+import { bookmarkManager } from './BookmarkManager';
+import { storageManager } from './StorageManager';
+import { tabManager } from './TabManager';
+
 
 /**
  * Space Manager state

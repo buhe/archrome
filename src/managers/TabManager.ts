@@ -144,7 +144,7 @@ export class TabManager {
           throw new Error('Failed to create tab');
         }
         return tab;
-      }, retries);
+      }, retries, retryDelay);
     } catch (error) {
       logger.error('TabManager', 'Error creating tab with retry', {
         url,

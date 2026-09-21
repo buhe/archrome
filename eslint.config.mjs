@@ -1,16 +1,17 @@
 import globals from "globals";
 import pluginJs from "@eslint/js";
-import tseslint from "typescript-eslint";
+import tseslintParser from "@typescript-eslint/parser";
+import tseslintPlugin from "@typescript-eslint/eslint-plugin";
 import pluginImport from "eslint-plugin-import";
 import eslintConfigPrettier from "eslint-config-prettier";
 
 export default [
   { ignores: ["dist/**", "node_modules/**", "*.config.js", "*.config.ts"] },
   { files: ["**/*.{js,mjs,cjs,ts}"] },
-  { languageOptions: { parser: tseslint.parser, parserOptions: { project: "./tsconfig.json" } } },
-  { languageOptions: { globals: { ...globals.browser, ...globals.node, ...chrome: "readonly" } } },
+  { languageOptions: { parser: tseslintParser, parserOptions: { project: "./tsconfig.json" } } },
+  { languageOptions: { globals: { ...globals.browser, ...globals.node, chrome: "readonly" } } },
   pluginJs.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslintPlugin.configs["flat/recommended"],
   {
     plugins: { import: pluginImport },
     rules: {

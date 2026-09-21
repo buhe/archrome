@@ -200,7 +200,7 @@ export class StorageManager {
       await chrome.storage.local.set({
         [STORAGE_KEYS.LAST_HEARTBEAT]: Date.now(),
       });
-    } catch (error) {
+    } catch {
       // Silently fail - heartbeat is not critical for functionality
       // Also refresh API availability check
       this.checkChromeApiAvailability();

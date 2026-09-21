@@ -65,7 +65,7 @@ export class ListComponent {
         const data = JSON.parse(e.dataTransfer!.getData('text/plain'));
         await this.options.onDrop?.(data);
       } catch (error) {
-        // eslint-disable-next-line no-console
+         
         console.error('Error processing drop:', error);
       }
     });

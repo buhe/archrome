@@ -5,7 +5,7 @@
 import type { LogEntry, SwitchMetric, LogFilter } from '@types/index';
 import { LogLevel } from '@types/index';
 import { logger } from '@utils/index';
-import { formatTime, formatDuration, exportAsJson } from '@utils/index';
+import { formatTime, exportAsJson } from '@utils/index';
 
 export interface LogViewerOptions {
   modalId: string;
@@ -191,7 +191,6 @@ export class LogViewer {
    * Render switch metrics
    */
   private async renderMetrics(): Promise<void> {
-    const metrics = await logger.getLogs();
     const switchMetrics = await this.getSwitchMetrics();
 
     // Show most recent metrics first

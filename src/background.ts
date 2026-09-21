@@ -3,8 +3,8 @@
  * Handles extension lifecycle, heartbeat mechanism, and side panel behavior
  */
 
-import { DEFAULT_CONFIG } from '@types/index';
 import { storageManager } from '@managers/index';
+import { DEFAULT_CONFIG } from '@types/index';
 import { logger } from '@utils/index';
 
 /**

@@ -21,6 +21,8 @@ interface SpaceManagerState {
   isSwitching: boolean;
   switchStartTime: number | null;
   isCreatingSpace: boolean;
+  hiddenSpaceIds: Set<string>;
+  hiddenSpaces: Array<{ id: string; icon: string; name: string }>;
 }
 
 /**
@@ -49,6 +51,8 @@ export class SpaceManager {
       isSwitching: false,
       switchStartTime: null,
       isCreatingSpace: false,
+      hiddenSpaceIds: new Set(),
+      hiddenSpaces: [],
     };
     this.config = DEFAULT_CONFIG;
     this.eventListeners = new Map();
@@ -89,14 +93,23 @@ export class SpaceManager {
 
   /**
    * Load all spaces from bookmark folders
+   * Hidden spaces (by ID) stay out of the visible list but are tracked
+   * separately so they can be restored later
    */
   async loadSpaces(): Promise<void> {
     try {
       const folders = await bookmarkManager.getSpaceFolders();
+      const hiddenIds = new Set(await storageManager.getHiddenSpaceIds());
+      const isHidden = (folderId: string) => hiddenIds.has(folderId);
+
+      this.state.hiddenSpaceIds = hiddenIds;
+      this.state.hiddenSpaces = folders
+        .filter((folder) => !bookmarkManager.isPinFolder(folder) && isHidden(folder.id))
+        .map((folder) => bookmarkManager.folderToSpace(folder));
 
       this.state.spaces = await Promise.all(
         folders
-          .filter((folder) => !bookmarkManager.isPinFolder(folder))
+          .filter((folder) => !bookmarkManager.isPinFolder(folder) && !isHidden(folder.id))
           .map(async (folder) => {
             const spaceInfo = bookmarkManager.folderToSpace(folder);
             const bookmarks = await bookmarkManager.getFolderBookmarks(folder.id);
@@ -525,6 +538,100 @@ export class SpaceManager {
       });
       return false;
     }
+  }
+
+  /**
+   * Hide a space (removed from the visible list without deleting it)
+   * The bookmark folder and stored tabs are kept so it can be restored later
+   */
+  async hideSpace(spaceId: string): Promise<boolean> {
+    try {
+      const space = this.getSpace(spaceId);
+      if (!space || this.state.isSwitching) {
+        return false;
+      }
+
+      // Never hide the last visible space — the sidebar needs at least one
+      // space to show, and it keeps the restore entry point reachable
+      // (the space context menu is the only place to unhide).
+      const others = this.state.spaces.filter((s) => s.id !== spaceId);
+      if (others.length === 0) {
+        logger.warn('SpaceManager', 'Cannot hide the only visible space', { spaceId });
+        return false;
+      }
+
+      // Switch away first while the space is still tracked, so its open tabs
+      // are closed and stored exactly like a regular space switch.
+      if (this.state.currentSpaceId === spaceId) {
+        const target = others[0];
+        await this.switchSpace(target.id);
+        if (this.state.currentSpaceId !== target.id) {
+          logger.warn('SpaceManager', 'Cannot hide space: switch away failed', { spaceId });
+          return false;
+        }
+      }
+
+      this.state.hiddenSpaceIds.add(spaceId);
+      this.state.hiddenSpaces.push({ id: space.id, icon: space.icon, name: space.name });
+      this.state.spaces = this.state.spaces.filter((s) => s.id !== spaceId);
+      await storageManager.setHiddenSpaceIds([...this.state.hiddenSpaceIds]);
+
+      logger.info('SpaceManager', 'Space hidden', { spaceId });
+
+      this.emitEvent({
+        type: EventType.SPACE_HIDDEN,
+        timestamp: Date.now(),
+        spaceId,
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('SpaceManager', 'Error hiding space', {
+        spaceId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Restore a previously hidden space to the visible list
+   */
+  async showSpace(spaceId: string): Promise<boolean> {
+    try {
+      if (!this.state.hiddenSpaceIds.has(spaceId)) {
+        return false;
+      }
+
+      this.state.hiddenSpaceIds.delete(spaceId);
+      await storageManager.setHiddenSpaceIds([...this.state.hiddenSpaceIds]);
+
+      // Rebuild the spaces list so the restored folder shows up again
+      await this.loadSpaces();
+
+      logger.info('SpaceManager', 'Space shown', { spaceId });
+
+      this.emitEvent({
+        type: EventType.SPACE_SHOWN,
+        timestamp: Date.now(),
+        spaceId,
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('SpaceManager', 'Error showing space', {
+        spaceId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Get hidden spaces (for the restore menu)
+   */
+  getHiddenSpaces(): Array<{ id: string; icon: string; name: string }> {
+    return this.state.hiddenSpaces.map((space) => ({ ...space }));
   }
 
   /**

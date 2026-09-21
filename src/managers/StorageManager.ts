@@ -253,6 +253,36 @@ export class StorageManager {
   }
 
   /**
+   * Get the list of hidden space IDs
+   */
+  async getHiddenSpaceIds(): Promise<string[]> {
+    try {
+      const result = await chrome.storage.local.get([STORAGE_KEYS.HIDDEN_SPACES]);
+      const ids = result[STORAGE_KEYS.HIDDEN_SPACES] as string[] | undefined;
+      return Array.isArray(ids) ? ids : [];
+    } catch (error) {
+      logger.error('StorageManager', 'Error getting hidden spaces', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Persist the list of hidden space IDs
+   */
+  async setHiddenSpaceIds(spaceIds: string[]): Promise<void> {
+    try {
+      await chrome.storage.local.set({ [STORAGE_KEYS.HIDDEN_SPACES]: spaceIds });
+    } catch (error) {
+      logger.error('StorageManager', 'Error setting hidden spaces', {
+        count: spaceIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
    * Clear all storage data
    */
   async clearAll(): Promise<void> {

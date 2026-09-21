@@ -21,6 +21,9 @@ const { spaceManager, bookmarkManager, storageManager } = vi.hoisted(() => ({
     switchSpace: vi.fn(async () => undefined),
     createAndSwitchSpace: vi.fn(async () => ({ id: '9', icon: '●', name: 'NewSpace', bookmarks: [], openTabs: [] })),
     deleteSpace: vi.fn(async () => true),
+    hideSpace: vi.fn(async () => true),
+    showSpace: vi.fn(async () => true),
+    getHiddenSpaces: vi.fn(() => []),
     reloadBookmarks: vi.fn(async () => undefined),
     moveTabToSpace: vi.fn(async () => true),
     removeTabFromSpace: vi.fn(async () => undefined),
@@ -130,15 +133,37 @@ describe('UIManager', () => {
       (document.querySelector('#spaces-list li') as HTMLElement).click();
       expect(spaceManager.triggerSwitch).toHaveBeenCalledWith('1');
     });
+  });
 
-    it('opens a delete context menu on right-click and deletes when confirmed', async () => {
-      ui.renderSpaces([{ id: '1', icon: '😀', name: 'Work', bookmarks: [], openTabs: [] }], null);
-      const li = document.querySelector('#spaces-list li') as HTMLElement;
-      li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+  /**
+   * Open the space context menu on the given space and return its items
+   */
+  function openSpaceContextMenu(space: Space) {
+    ui.renderSpaces([space], null);
+    const li = document.querySelector('#spaces-list li') as HTMLElement;
+    li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
 
-      const item = document.querySelector('.custom-context-menu .context-menu-item') as HTMLElement;
-      expect(item).toBeTruthy();
-      item.click();
+    return [...document.querySelectorAll('.custom-context-menu .context-menu-item')];
+  }
+
+  /**
+   * Find a top-level context menu item by its label text
+   */
+  function findMenuItem(items: HTMLElement[], label: string): HTMLElement {
+    const item = items.find((el) => el.querySelector('.context-menu-label')?.textContent === label);
+    expect(item).toBeTruthy();
+    return item!;
+  }
+
+  describe('space context menu', () => {
+    const WORK: Space = { id: '1', icon: '😀', name: 'Work', bookmarks: [], openTabs: [] };
+    const HOME: Space = { id: '2', icon: '🏠', name: 'Home', bookmarks: [], openTabs: [] };
+
+    it('opens with Hide as the first item and deletes when confirmed', async () => {
+      const items = openSpaceContextMenu(WORK);
+      expect(items[0].textContent).toContain('Hide');
+
+      findMenuItem(items, 'Delete space').click();
 
       // Confirmation now uses the in-panel dialog instead of window.confirm
       await vi.waitFor(() => {
@@ -152,10 +177,8 @@ describe('UIManager', () => {
     });
 
     it('does not delete when confirmation is dismissed', async () => {
-      ui.renderSpaces([{ id: '1', icon: '😀', name: 'Work', bookmarks: [], openTabs: [] }], null);
-      const li = document.querySelector('#spaces-list li') as HTMLElement;
-      li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
-      (document.querySelector('.custom-context-menu .context-menu-item') as HTMLElement).click();
+      const items = openSpaceContextMenu(WORK);
+      findMenuItem(items, 'Delete space').click();
 
       await vi.waitFor(() => {
         expect(document.querySelector('.dialog-overlay')).toBeTruthy();
@@ -163,6 +186,82 @@ describe('UIManager', () => {
       (document.querySelector('.dialog-overlay .dialog-btn:not(.dialog-btn-primary)') as HTMLElement).click();
       await new Promise((r) => setTimeout(r, 0));
       expect(spaceManager.deleteSpace).not.toHaveBeenCalled();
+    });
+
+    it('hides the space when Hide is clicked and other spaces remain', async () => {
+      spaceManager.getSpaces.mockReturnValue([WORK, HOME]);
+      const items = openSpaceContextMenu(WORK);
+
+      findMenuItem(items, 'Hide').click();
+
+      await vi.waitFor(() => {
+        expect(spaceManager.hideSpace).toHaveBeenCalledWith('1');
+      });
+      expect(spaceManager.showSpace).not.toHaveBeenCalled();
+    });
+
+    it('refuses to hide the only visible space', async () => {
+      spaceManager.getSpaces.mockReturnValue([WORK]);
+      const items = openSpaceContextMenu(WORK);
+
+      findMenuItem(items, 'Hide').click();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('.dialog-toast')).toBeTruthy();
+      });
+      expect(spaceManager.hideSpace).not.toHaveBeenCalled();
+    });
+
+    it('refuses to hide while a space operation is running', async () => {
+      spaceManager.getSpaces.mockReturnValue([WORK, HOME]);
+      spaceManager.isSwitching.mockReturnValue(true);
+      const items = openSpaceContextMenu(WORK);
+
+      findMenuItem(items, 'Hide').click();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('.dialog-toast')).toBeTruthy();
+      });
+      expect(spaceManager.hideSpace).not.toHaveBeenCalled();
+    });
+
+    it('lists hidden spaces in the Show hidden submenu and restores them', async () => {
+      spaceManager.getSpaces.mockReturnValue([WORK]);
+      spaceManager.getHiddenSpaces.mockReturnValue([{ id: '9', icon: '●', name: 'Secret' }]);
+      const items = openSpaceContextMenu(WORK);
+
+      const showHidden = findMenuItem(items, 'Show hidden');
+      const subItem = showHidden.querySelector('.context-submenu .context-menu-item') as HTMLElement;
+      expect(subItem?.textContent).toBe('Secret');
+
+      subItem.click();
+
+      await vi.waitFor(() => {
+        expect(spaceManager.showSpace).toHaveBeenCalledWith('9');
+      });
+    });
+
+    it('omits the Show hidden submenu when nothing is hidden', () => {
+      const items = openSpaceContextMenu(WORK);
+      const showHidden = items.find(
+        (el) => el.querySelector('.context-menu-label')?.textContent === 'Show hidden',
+      );
+      expect(showHidden).toBeUndefined();
+    });
+
+    it('re-renders the spaces list on SPACE_HIDDEN and SPACE_SHOWN events', () => {
+      const hiddenHandler = handlerFor(EventType.SPACE_HIDDEN)!;
+      const shownHandler = handlerFor(EventType.SPACE_SHOWN)!;
+
+      spaceManager.getSpaces.mockReturnValue([HOME]);
+      spaceManager.getCurrentSpaceId.mockReturnValue('2');
+
+      hiddenHandler({ type: EventType.SPACE_HIDDEN, timestamp: 0, spaceId: '1' });
+      expect(document.querySelectorAll('#spaces-list li').length).toBe(1);
+
+      spaceManager.getSpaces.mockReturnValue([WORK, HOME]);
+      shownHandler({ type: EventType.SPACE_SHOWN, timestamp: 0, spaceId: '1' });
+      expect(document.querySelectorAll('#spaces-list li').length).toBe(2);
     });
   });
 

@@ -3,7 +3,7 @@
  * Handles rendering of bookmarks, tabs, spaces, and pinned items
  */
 
-import type { Space, BookmarkData, TabData, AppEvent, Theme } from '@types/index';
+import type { Space, BookmarkData, TabData, AppEvent, Theme, ContextMenuItem } from '@types/index';
 import { EventType } from '@types/index';
 import { spaceManager } from '@managers/index';
 import { bookmarkManager } from '@managers/index';
@@ -105,6 +105,8 @@ export class UIManager {
     spaceManager.on(EventType.BOOKMARKS_UPDATED, this.handleBookmarksUpdated.bind(this));
     spaceManager.on(EventType.SPACE_CREATED, this.handleSpaceCreated.bind(this));
     spaceManager.on(EventType.SPACE_DELETED, this.handleSpaceDeleted.bind(this));
+    spaceManager.on(EventType.SPACE_HIDDEN, this.handleSpaceHidden.bind(this));
+    spaceManager.on(EventType.SPACE_SHOWN, this.handleSpaceShown.bind(this));
 
     // Listen to bookmark changes
     bookmarkManager.onBookmarkChanged(() => this.handleBookmarkChanged());
@@ -308,21 +310,99 @@ export class UIManager {
   private handleSpaceContextMenu(space: Space, event: MouseEvent): void {
     this.closeContextMenu();
 
-    this.currentContextMenu = new ContextMenu({
-      items: [
-        {
-          label: 'Delete space',
-          icon: '🗑️',
-          action: async () => {
-            await this.handleDeleteSpace(space);
-          },
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Hide',
+        icon: '🙈',
+        action: async () => {
+          await this.handleHideSpace(space);
         },
-      ],
+      },
+    ];
+
+    // Restore entry point for hidden spaces (always reachable because the
+    // last visible space can never be hidden)
+    const hiddenSpaces = spaceManager.getHiddenSpaces();
+    if (hiddenSpaces.length > 0) {
+      items.push({
+        label: 'Show hidden',
+        icon: '👁️',
+        items: hiddenSpaces.map((hidden) => ({
+          label: hidden.name,
+          action: async () => {
+            await this.handleShowSpace(hidden.id);
+          },
+        })),
+      });
+    }
+
+    items.push({
+      label: 'Delete space',
+      icon: '🗑️',
+      action: async () => {
+        await this.handleDeleteSpace(space);
+      },
+    });
+
+    this.currentContextMenu = new ContextMenu({
+      items,
       position: { x: event.pageX, y: event.pageY },
       onClose: () => {
         this.currentContextMenu = null;
       },
     });
+  }
+
+  /**
+   * Hide a space after guards
+   */
+  private async handleHideSpace(space: Space): Promise<void> {
+    try {
+      if (spaceManager.isSwitching()) {
+        this.dialogs.toast('A space operation is already in progress. Please wait.');
+        return;
+      }
+
+      if (spaceManager.getSpaces().length <= 1) {
+        this.dialogs.toast('Cannot hide the only visible space.');
+        return;
+      }
+
+      const success = await spaceManager.hideSpace(space.id);
+      if (success) {
+        this.dialogs.toast(
+          `Space "${space.name}" hidden. Right-click a space to restore it.`,
+          4000,
+        );
+      } else {
+        this.dialogs.toast('Failed to hide space. Please try again.', 5000);
+      }
+    } catch (error) {
+      logger.error('UIManager', 'Error hiding space', {
+        spaceId: space.id,
+        spaceName: space.name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.dialogs.toast('Error hiding space. Please try again.', 5000);
+    }
+  }
+
+  /**
+   * Restore a hidden space
+   */
+  private async handleShowSpace(spaceId: string): Promise<void> {
+    try {
+      const success = await spaceManager.showSpace(spaceId);
+      if (!success) {
+        this.dialogs.toast('Failed to restore space. Please try again.', 5000);
+      }
+    } catch (error) {
+      logger.error('UIManager', 'Error showing space', {
+        spaceId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.dialogs.toast('Error restoring space. Please try again.', 5000);
+    }
   }
 
   /**
@@ -415,6 +495,24 @@ export class UIManager {
    */
   private handleSpaceDeleted(event: AppEvent): void {
     if (event.type !== EventType.SPACE_DELETED) return;
+
+    this.renderSpaces(spaceManager.getSpaces(), spaceManager.getCurrentSpaceId());
+  }
+
+  /**
+   * Handle space hidden event
+   */
+  private handleSpaceHidden(event: AppEvent): void {
+    if (event.type !== EventType.SPACE_HIDDEN) return;
+
+    this.renderSpaces(spaceManager.getSpaces(), spaceManager.getCurrentSpaceId());
+  }
+
+  /**
+   * Handle space shown event
+   */
+  private handleSpaceShown(event: AppEvent): void {
+    if (event.type !== EventType.SPACE_SHOWN) return;
 
     this.renderSpaces(spaceManager.getSpaces(), spaceManager.getCurrentSpaceId());
   }

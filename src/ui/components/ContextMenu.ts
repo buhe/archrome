@@ -82,7 +82,7 @@ export class ContextMenu {
         subMenuItem.textContent = subItem.label;
 
         subMenuItem.addEventListener('click', async () => {
-          await subItem.action();
+          await subItem.action?.();
           this.close();
         });
 
@@ -106,7 +106,7 @@ export class ContextMenu {
     } else {
       // Handle click action
       menuItem.addEventListener('click', async () => {
-        await item.action();
+        await item.action?.();
         this.close();
       });
     }

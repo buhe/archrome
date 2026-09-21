@@ -123,7 +123,7 @@ export class BookmarkManager {
         (node) => node.title.toLowerCase() === this.pinFolderName && node.children,
       );
 
-      return pinFolder || null;
+      return pinFolder ?? null;
     } catch (error) {
       logger.error('BookmarkManager', 'Error getting pin folder', {
         error: error instanceof Error ? error.message : String(error),
@@ -148,7 +148,7 @@ export class BookmarkManager {
         .map((node) => ({
           id: node.id,
           title: node.title,
-          url: node.url || '',
+          url: node.url ?? '',
           dateAdded: node.dateAdded,
           index: node.index,
           parentId: node.parentId,
@@ -178,11 +178,11 @@ export class BookmarkManager {
         .map((node) => ({
           id: node.id,
           title: node.title,
-          url: node.url || '',
+          url: node.url ?? '',
           dateAdded: node.dateAdded,
           index: node.index,
           parentId: node.parentId,
-        })) || [];
+        })) ?? [];
     } catch (error) {
       logger.error('BookmarkManager', 'Error getting pinned bookmarks', {
         error: error instanceof Error ? error.message : String(error),
@@ -208,7 +208,7 @@ export class BookmarkManager {
       return {
         id: result.id,
         title: result.title,
-        url: result.url || '',
+        url: result.url ?? '',
         dateAdded: result.dateAdded,
         index: result.index,
         parentId: result.parentId,
@@ -361,7 +361,7 @@ export class BookmarkManager {
         .map((node) => ({
           id: node.id,
           title: node.title,
-          url: node.url || '',
+          url: node.url ?? '',
           dateAdded: node.dateAdded,
           index: node.index,
           parentId: node.parentId,

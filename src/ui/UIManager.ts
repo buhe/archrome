@@ -126,7 +126,7 @@ export class UIManager {
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
-        error: event.error?.message || String(event.error),
+        error: event.error?.message ?? String(event.error),
       });
     });
 

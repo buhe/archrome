@@ -16,7 +16,8 @@ export interface ContextMenuOptions {
 export class ContextMenu {
   private element: HTMLDivElement;
   private options: ContextMenuOptions;
-  private submenus: Map<HTMLElement, ContextMenu> = new Map();
+  private submenus: Map<HTMLElement, ContextMenu | null> = new Map();
+  private closeHandler: ((e: MouseEvent) => void) | null = null;
 
   constructor(options: ContextMenuOptions) {
     this.options = options;
@@ -102,7 +103,7 @@ export class ContextMenu {
         subMenu.style.display = 'none';
       });
 
-      this.submenus.set(menuItem, null as any);
+      this.submenus.set(menuItem, null);
     } else {
       // Handle click action
       menuItem.addEventListener('click', async () => {
@@ -158,7 +159,7 @@ export class ContextMenu {
     }, 0);
 
     // Store reference for cleanup
-    (this.element as any)._closeHandler = closeHandler;
+    this.closeHandler = closeHandler;
   }
 
   /**
@@ -183,9 +184,8 @@ export class ContextMenu {
    */
   close(): void {
     // Remove close handler
-    const closeHandler = (this.element as any)._closeHandler;
-    if (closeHandler) {
-      document.removeEventListener('click', closeHandler);
+    if (this.closeHandler) {
+      document.removeEventListener('click', this.closeHandler);
     }
 
     // Clear submenus map

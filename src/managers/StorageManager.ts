@@ -32,7 +32,7 @@ export class StorageManager {
    */
   private checkChromeApiAvailability(): void {
     try {
-      this.chromeApiReady = !!(chrome.storage && chrome.storage.local);
+      this.chromeApiReady = !!chrome.storage?.local;
     } catch {
       this.chromeApiReady = false;
     }

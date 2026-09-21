@@ -125,7 +125,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  */
 self.addEventListener('error', (event) => {
   logger.error('Background', 'Service worker error', {
-    error: event.error?.message || String(event.error),
+    error: event.error?.message ?? String(event.error),
   });
   event.preventDefault();
 });

@@ -74,7 +74,7 @@ export function cleanTabsData(tabs: TabData[], maxTabs: number): TabData[] {
     id: tab.id,
     url: tab.url,
     title: tab.title || 'Untitled',
-    favIconUrl: tab.favIconUrl || null,
+    favIconUrl: tab.favIconUrl ?? null,
   }));
 }
 

@@ -788,7 +788,7 @@ export class SpaceManager {
    * Get a space by ID
    */
   getSpace(spaceId: string): Space | null {
-    return this.state.spaces.find((s) => s.id === spaceId) || null;
+    return this.state.spaces.find((s) => s.id === spaceId) ?? null;
   }
 
   /**

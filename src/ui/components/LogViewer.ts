@@ -217,7 +217,7 @@ export class LogViewer {
   private renderMetricRow(metric: SwitchMetric): string {
     const status = metric.status || 'unknown';
     const statusClass = status === 'success' ? 'success' : status === 'failed' ? 'failed' : 'started';
-    const duration = metric.duration || (metric.startTime ? Date.now() - metric.startTime : '-');
+    const duration = metric.duration ?? (metric.startTime ? Date.now() - metric.startTime : '-');
     const durationMs = typeof duration === 'number' ? `${duration}ms` : duration;
     const durationClass = duration > 5000 ? 'very-slow' : duration > 2000 ? 'slow' : '';
     const time = formatTime(metric.startTime);
@@ -225,7 +225,7 @@ export class LogViewer {
     return `<div class="metric-row">
       <div><span class="metric-status ${statusClass}">${status}</span></div>
       <div>${this.escapeHtml(time)}</div>
-      <div>${this.escapeHtml(metric.fromSpace || '-')}</div>
+      <div>${this.escapeHtml(metric.fromSpace ?? '-')}</div>
       <div>${this.escapeHtml(metric.toSpace || '-')}</div>
       <div class="metric-duration ${durationClass}">${this.escapeHtml(durationMs)}</div>
     </div>`;

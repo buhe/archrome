@@ -130,6 +130,7 @@ export const STORAGE_KEYS = {
   LAST_ACTIVE_SPACE: 'last_active_space_id',
   LAST_HEARTBEAT: 'last_heartbeat',
   THEME: 'archrome_theme',
+  HIDDEN_SPACES: 'archrome_hidden_spaces',
   SPACE_TABS_PREFIX: 'space_',
   SPACE_TABS_SUFFIX: '_tabs',
 } as const;
@@ -185,6 +186,8 @@ export enum EventType {
   SPACE_CREATED = 'space_created',
   SPACE_DELETED = 'space_deleted',
   SPACE_RENAMED = 'space_renamed',
+  SPACE_HIDDEN = 'space_hidden',
+  SPACE_SHOWN = 'space_shown',
 }
 
 /**
@@ -249,6 +252,22 @@ export interface SpaceRenamedEvent extends BaseEvent {
 }
 
 /**
+ * Space hidden event (space removed from the visible list without deleting it)
+ */
+export interface SpaceHiddenEvent extends BaseEvent {
+  type: EventType.SPACE_HIDDEN;
+  spaceId: string;
+}
+
+/**
+ * Space shown event (previously hidden space restored to the visible list)
+ */
+export interface SpaceShownEvent extends BaseEvent {
+  type: EventType.SPACE_SHOWN;
+  spaceId: string;
+}
+
+/**
  * Union type of all events
  */
 export type AppEvent =
@@ -257,7 +276,9 @@ export type AppEvent =
   | BookmarksUpdatedEvent
   | SpaceCreatedEvent
   | SpaceDeletedEvent
-  | SpaceRenamedEvent;
+  | SpaceRenamedEvent
+  | SpaceHiddenEvent
+  | SpaceShownEvent;
 
 /**
  * Event listener function type
@@ -283,10 +304,11 @@ export type LogFilter = 'all' | 'error' | 'warn' | 'switch';
 
 /**
  * Context menu item configuration
+ * `action` is omitted for parent items that only open a submenu
  */
 export interface ContextMenuItem {
   label: string;
-  action: () => void | Promise<void>;
+  action?: () => void | Promise<void>;
   icon?: string;
   items?: ContextMenuItem[];
 }

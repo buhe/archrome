@@ -65,7 +65,7 @@ export class ListComponent {
         const data = JSON.parse(e.dataTransfer!.getData('text/plain'));
         await this.options.onDrop?.(data);
       } catch (error) {
-        // eslint-disable-next-line no-console
+         
         console.error('Error processing drop:', error);
       }
     });
@@ -75,7 +75,7 @@ export class ListComponent {
    * Add an item to the list
    */
   addItem(item: ListItemComponent): void {
-    const id = item.getElement().dataset.id || item['options'].data.id;
+    const id = item.getElement().dataset.id ?? item['options'].data.id;
     this.items.set(id, item);
     this.container.appendChild(item.getElement());
   }

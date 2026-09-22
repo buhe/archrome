@@ -121,6 +121,79 @@ describe('SpaceManager', () => {
     });
   });
 
+  describe('hide / show', () => {
+    it('loadSpaces excludes hidden spaces and lists them via getHiddenSpaces', async () => {
+      chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
+      chrome.bookmarks.getSubTree.mockResolvedValue([{ id: 'x', title: '', children: [] }]);
+      await chrome.storage.local.set({ archrome_hidden_spaces: ['s1', 'pin'] });
+
+      await sm.loadSpaces();
+
+      expect(sm.getSpaces().map((s) => s.id)).toEqual(['s2']);
+      const hidden = sm.getHiddenSpaces();
+      expect(hidden.map((h) => h.id)).toEqual(['s1']); // pin is never listed
+      expect(hidden[0].name).toBe('Work');
+    });
+
+    it('hideSpace removes the space, persists hidden ids and emits SPACE_HIDDEN', async () => {
+      const listener = vi.fn();
+      sm.on(EventType.SPACE_HIDDEN, listener);
+
+      const a = await sm.createSpace('A');
+      await sm.createSpace('B');
+      const ok = await sm.hideSpace(a!.id);
+
+      expect(ok).toBe(true);
+      expect(sm.hasSpace(a!.id)).toBe(false);
+      expect(sm.getHiddenSpaces().map((h) => h.id)).toEqual([a!.id]);
+
+      const stored = await chrome.storage.local.get(['archrome_hidden_spaces']);
+      expect(stored['archrome_hidden_spaces']).toEqual([a!.id]);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('hideSpace refuses to hide the only visible space', async () => {
+      const a = await sm.createSpace('Only');
+      expect(await sm.hideSpace(a!.id)).toBe(false);
+      expect(sm.hasSpace(a!.id)).toBe(true);
+      expect(sm.getHiddenSpaces()).toEqual([]);
+    });
+
+    it('hideSpace switches away first when hiding the current space', async () => {
+      const a = (await sm.createSpace('A'))!;
+      const b = (await sm.createSpace('B'))!;
+      await sm.switchSpace(a.id);
+
+      expect(await sm.hideSpace(a.id)).toBe(true);
+      expect(sm.getCurrentSpaceId()).toBe(b.id);
+      expect(sm.hasSpace(a.id)).toBe(false);
+    });
+
+    it('showSpace restores a hidden space and clears the hidden state', async () => {
+      chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
+      chrome.bookmarks.getSubTree.mockResolvedValue([{ id: 'x', title: '', children: [] }]);
+      await chrome.storage.local.set({ archrome_hidden_spaces: ['s1'] });
+      await sm.loadSpaces();
+      expect(sm.hasSpace('s1')).toBe(false);
+
+      const listener = vi.fn();
+      sm.on(EventType.SPACE_SHOWN, listener);
+
+      expect(await sm.showSpace('s1')).toBe(true);
+      expect(sm.hasSpace('s1')).toBe(true);
+      expect(sm.getSpaces().map((s) => s.id)).toEqual(['s1', 's2']);
+      expect(sm.getHiddenSpaces()).toEqual([]);
+
+      const stored = await chrome.storage.local.get(['archrome_hidden_spaces']);
+      expect(stored['archrome_hidden_spaces']).toEqual([]);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('showSpace is a no-op for a space that is not hidden', async () => {
+      expect(await sm.showSpace('missing')).toBe(false);
+    });
+  });
+
   describe('tab management', () => {
     // Note: switching to an empty space creates a new tab page placeholder
     // tab, so openTabs starts with one placeholder entry after switchSpace.
@@ -333,6 +406,15 @@ describe('SpaceManager', () => {
 
       await sm.initialize();
       expect(sm.getCurrentSpaceId()).toBe('s1');
+    });
+
+    it('falls back to a visible space when the last active space is hidden', async () => {
+      chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
+      chrome.bookmarks.getSubTree.mockResolvedValue([{ id: 'x', title: '', children: [] }]);
+      await chrome.storage.local.set({ last_active_space_id: 's1', archrome_hidden_spaces: ['s1'] });
+
+      await sm.initialize();
+      expect(sm.getCurrentSpaceId()).toBe('s2');
     });
   });
 

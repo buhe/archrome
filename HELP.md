@@ -20,6 +20,8 @@ Your data lives in Chrome’s native bookmarks—not locked inside the extension
 | Create a space | Click the **+** button at the bottom |
 | Switch space | Click the space icon at the bottom |
 | Custom icon | Rename the bookmark folder so it starts with an emoji, e.g. `💼 Work` |
+| Hide space | Right-click a space → Hide. The space disappears from the list but keeps its folder, bookmarks and tabs |
+| Restore hidden space | Right-click any space → Show hidden → pick the space |
 | Delete space | Right-click a space → Delete (confirmation required) |
 
 **What happens on switch:** Open tabs in the current space are saved and closed, then the target space’s tabs are restored automatically.

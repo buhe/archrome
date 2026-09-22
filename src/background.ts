@@ -3,8 +3,8 @@
  * Handles extension lifecycle, heartbeat mechanism, and side panel behavior
  */
 
-import { DEFAULT_CONFIG } from '@types/index';
 import { storageManager } from '@managers/index';
+import { DEFAULT_CONFIG } from '@types/index';
 import { logger } from '@utils/index';
 
 /**
@@ -125,7 +125,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  */
 self.addEventListener('error', (event) => {
   logger.error('Background', 'Service worker error', {
-    error: event.error?.message || String(event.error),
+    error: event.error?.message ?? String(event.error),
   });
   event.preventDefault();
 });

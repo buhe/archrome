@@ -53,10 +53,10 @@ export class Logger {
     const prefix = `[${entry.timestamp}] [${levelName}] [${entry.category}]`;
 
     if (entry.data) {
-      // eslint-disable-next-line no-console
+       
       console.log(prefix, entry.message, entry.data);
     } else {
-      // eslint-disable-next-line no-console
+       
       console.log(prefix, entry.message);
     }
   }
@@ -78,7 +78,7 @@ export class Logger {
       await chrome.storage.local.set({ [STORAGE_KEYS.LOGS]: logs });
     } catch (error) {
       // Last resort - try console
-      // eslint-disable-next-line no-console
+       
       console.error('Failed to write log:', error, entry);
     }
   }
@@ -97,7 +97,7 @@ export class Logger {
 
       return logs;
     } catch (error) {
-      // eslint-disable-next-line no-console
+       
       console.error('Failed to get logs:', error);
       return [];
     }
@@ -113,7 +113,7 @@ export class Logger {
         [STORAGE_KEYS.SWITCH_METRICS]: [],
       });
     } catch (error) {
-      // eslint-disable-next-line no-console
+       
       console.error('Failed to clear logs:', error);
     }
   }

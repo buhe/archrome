@@ -53,7 +53,7 @@ vi.mock('@managers/index', () => ({
 }));
 
 import { UIManager } from '@ui/UIManager';
-import { EventType } from '@types/index';
+import { EventType, DEFAULT_CONFIG } from '@types/index';
 import type { Space, BookmarkData, TabData } from '@types/index';
 
 function setupDom() {
@@ -100,6 +100,7 @@ describe('UIManager', () => {
     ui?.destroy();
     document.body.innerHTML = '';
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   function handlerFor(type: EventType) {
@@ -374,31 +375,55 @@ describe('UIManager', () => {
     });
 
     it('handleBookmarkChanged skips reload while switching', async () => {
-      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => Promise<void>;
+      vi.useFakeTimers();
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => void;
       spaceManager.isSwitching.mockReturnValue(true);
-      await cb();
+      cb();
+      await vi.advanceTimersByTimeAsync(DEFAULT_CONFIG.bookmarkReloadDebounceMs + 10);
       expect(spaceManager.reloadBookmarks).not.toHaveBeenCalled();
     });
 
     it('handleBookmarkChanged skips reload while creating a space', async () => {
-      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => Promise<void>;
+      vi.useFakeTimers();
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => void;
       // Bookmark events from space creation arrive while no switch runs yet
       spaceManager.isSwitching.mockReturnValue(false);
       spaceManager.isCreatingSpace.mockReturnValue(true);
-      await cb();
+      cb();
+      await vi.advanceTimersByTimeAsync(DEFAULT_CONFIG.bookmarkReloadDebounceMs + 10);
       expect(spaceManager.reloadBookmarks).not.toHaveBeenCalled();
     });
 
     it('handleBookmarkChanged reloads bookmarks when idle', async () => {
-      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => Promise<void>;
+      vi.useFakeTimers();
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => void;
       spaceManager.isSwitching.mockReturnValue(false);
       spaceManager.isCreatingSpace.mockReturnValue(false);
       spaceManager.getCurrentSpace.mockReturnValue(SPACE);
       spaceManager.getSpaces.mockReturnValue([SPACE]);
       spaceManager.getCurrentSpaceId.mockReturnValue('1');
       spaceManager.getPinnedBookmarks.mockReturnValue([]);
-      await cb();
+      cb();
+      await vi.advanceTimersByTimeAsync(DEFAULT_CONFIG.bookmarkReloadDebounceMs + 10);
       expect(spaceManager.reloadBookmarks).toHaveBeenCalled();
+    });
+
+    it('bursts of bookmark events collapse into a single debounced reload', async () => {
+      vi.useFakeTimers();
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => void;
+      spaceManager.isSwitching.mockReturnValue(false);
+      spaceManager.isCreatingSpace.mockReturnValue(false);
+      spaceManager.getCurrentSpace.mockReturnValue(SPACE);
+      spaceManager.getSpaces.mockReturnValue([SPACE]);
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+      spaceManager.getPinnedBookmarks.mockReturnValue([]);
+
+      // One drop can fire several bookmark events in quick succession
+      cb();
+      cb();
+      cb();
+      await vi.advanceTimersByTimeAsync(DEFAULT_CONFIG.bookmarkReloadDebounceMs + 10);
+      expect(spaceManager.reloadBookmarks).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -486,8 +511,11 @@ describe('UIManager', () => {
       });
 
       expect(bookmarkManager.createBookmark).toHaveBeenCalledWith('pin1', 'T', 'https://t.com');
-      expect(spaceManager.loadPinnedBookmarks).toHaveBeenCalled();
-      expect(spaceManager.removeTabFromSpace).toHaveBeenCalledWith('1', 50);
+      // The onRemoved listener owns the space removal and the debounced
+      // bookmark-event reload owns the re-render; the drop handler must not
+      // duplicate either.
+      expect(spaceManager.removeTabFromSpace).not.toHaveBeenCalled();
+      expect(spaceManager.loadPinnedBookmarks).not.toHaveBeenCalled();
       expect(bookmarkManager.createFolder).not.toHaveBeenCalled();
     });
 
@@ -518,11 +546,6 @@ describe('UIManager', () => {
 
     it('moves an existing bookmark into the pin folder without touching tabs', async () => {
       bookmarkManager.getPinFolder.mockResolvedValueOnce({ id: 'pin1', title: 'pin' });
-      spaceManager.getCurrentSpace.mockReturnValue({
-        id: '1', icon: '◆', name: 'S1', bookmarks: [
-          { id: 'bm1', title: 'B', url: 'https://b.com' },
-        ], openTabs: [],
-      });
 
       dispatchDrop({ id: 'bm1', title: 'B', url: 'https://b.com' });
       await vi.waitFor(() => {
@@ -531,8 +554,68 @@ describe('UIManager', () => {
 
       expect(bookmarkManager.createBookmark).not.toHaveBeenCalled();
       expect(chrome.tabs.remove).not.toHaveBeenCalled();
-      expect(spaceManager.loadPinnedBookmarks).toHaveBeenCalled();
-      expect(document.querySelectorAll('#bookmarks-list .item-list-item').length).toBe(0);
+      expect(spaceManager.loadPinnedBookmarks).not.toHaveBeenCalled();
+    });
+
+    it('falls back to removing the tab from the space when closing fails', async () => {
+      vi.spyOn(chrome.tabs, 'remove').mockRejectedValueOnce(new Error('gone'));
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+      bookmarkManager.getPinFolder.mockResolvedValueOnce({ id: 'pin1', title: 'pin' });
+
+      dispatchDrop({ id: 53, title: 'F', url: 'https://f.com' });
+      await vi.waitFor(() => {
+        expect(spaceManager.removeTabFromSpace).toHaveBeenCalledWith('1', 53);
+      });
+    });
+  });
+
+  describe('drop to bookmarks', () => {
+    function dispatchDrop(payload: unknown) {
+      const ul = document.getElementById('bookmarks-list')!;
+      const dataTransfer = {
+        getData: vi.fn(() => JSON.stringify(payload)),
+        dropEffect: 'none',
+      };
+      const evt = new Event('drop', { bubbles: true }) as DragEvent;
+      Object.defineProperty(evt, 'dataTransfer', { value: dataTransfer });
+      Object.defineProperty(evt, 'preventDefault', { value: vi.fn() });
+      ul.dispatchEvent(evt);
+      return evt;
+    }
+
+    it('creates a bookmark in the current space and closes the tab', async () => {
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+
+      dispatchDrop({ id: 42, title: 'T', url: 'https://t.com' });
+      await vi.waitFor(() => {
+        expect(chrome.tabs.remove).toHaveBeenCalledWith(42);
+      });
+
+      expect(bookmarkManager.createBookmark).toHaveBeenCalledWith('1', 'T', 'https://t.com');
+      // No manual re-read and no duplicate space removal: the debounced
+      // bookmark-event reload and the onRemoved listener own those.
+      expect(bookmarkManager.getFolderBookmarks).not.toHaveBeenCalled();
+      expect(spaceManager.removeTabFromSpace).not.toHaveBeenCalled();
+    });
+
+    it('falls back to removing the tab from the space when closing fails', async () => {
+      vi.spyOn(chrome.tabs, 'remove').mockRejectedValueOnce(new Error('nope'));
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+
+      dispatchDrop({ id: 43, title: 'T2', url: 'https://t2.com' });
+      await vi.waitFor(() => {
+        expect(spaceManager.removeTabFromSpace).toHaveBeenCalledWith('1', 43);
+      });
+    });
+
+    it('does nothing without a current space', async () => {
+      spaceManager.getCurrentSpaceId.mockReturnValue(null);
+
+      dispatchDrop({ id: 44, title: 'T3', url: 'https://t3.com' });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(bookmarkManager.createBookmark).not.toHaveBeenCalled();
+      expect(chrome.tabs.remove).not.toHaveBeenCalled();
     });
   });
 });

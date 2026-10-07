@@ -44,6 +44,7 @@ export class SpaceManager {
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private debounceSwitch: (spaceId: string) => void;
   private recentlyClosedTabIds: Map<number, number> = new Map();
+  private reloadQueue: Promise<void> = Promise.resolve();
 
   constructor() {
     this.state = {
@@ -758,10 +759,24 @@ export class SpaceManager {
 
   /**
    * Reload bookmarks for all spaces
-   * Skips reload if currently switching or creating spaces to avoid conflicts
+   * Serialized: concurrent callers (bookmark events, wake recovery) queue up
+   * instead of interleaving loadSpaces runs, which race on replacing
+   * state.spaces.
    */
   async reloadBookmarks(): Promise<void> {
-    // Skip reload if currently switching or creating spaces to avoid conflicts
+    const run = this.reloadQueue.then(() => this.performReloadBookmarks());
+    // Keep the queue alive even if a run fails
+    this.reloadQueue = run.catch(() => {});
+    await run;
+  }
+
+  /**
+   * Actual reload work, executed one caller at a time
+   */
+  private async performReloadBookmarks(): Promise<void> {
+    // Skip reload if currently switching or creating spaces to avoid
+    // conflicts. Checked at execution time so a space operation that starts
+    // while this reload waits in the queue is still respected.
     if (this.state.isSwitching || this.state.isCreatingSpace) {
       logger.debug('SpaceManager', 'Skipping bookmark reload during space operation', {
         isSwitching: this.state.isSwitching,

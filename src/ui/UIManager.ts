@@ -6,9 +6,11 @@
 import { spaceManager } from '@managers/index';
 import { bookmarkManager } from '@managers/index';
 import { storageManager } from '@managers/index';
-import { EventType } from '@types/index';
+import { EventType, DEFAULT_CONFIG } from '@types/index';
 import type { Space, BookmarkData, TabData, AppEvent, Theme, ContextMenuItem } from '@types/index';
+import type { DebouncedFunction } from '@utils/index';
 import { isEmoji } from '@utils/index';
+import { debounce } from '@utils/index';
 import { logger } from '@utils/index';
 
 import { ListItemComponent, ListComponent, ContextMenu, LogViewer, DialogManager } from './components';
@@ -30,8 +32,16 @@ export class UIManager {
   private currentContextMenu: ContextMenu | null = null;
   private isRecovering: boolean = false;
   private currentTheme: Theme = 'light';
+  private debouncedBookmarkReload: DebouncedFunction<() => void>;
 
   constructor() {
+    // Bookmark events arrive in bursts (a single tab drop fires onCreated plus
+    // the tab's onRemoved cascade). Debounce the full reload so a burst
+    // collapses into one getTree + per-space read instead of one per event.
+    this.debouncedBookmarkReload = debounce(
+      () => void this.handleBookmarkChanged(),
+      DEFAULT_CONFIG.bookmarkReloadDebounceMs,
+    );
     // Initialize list components
     this.pinnedList = new ListComponent({
       containerId: 'pinned-list',
@@ -108,8 +118,8 @@ export class UIManager {
     spaceManager.on(EventType.SPACE_HIDDEN, this.handleSpaceHidden.bind(this));
     spaceManager.on(EventType.SPACE_SHOWN, this.handleSpaceShown.bind(this));
 
-    // Listen to bookmark changes
-    bookmarkManager.onBookmarkChanged(() => this.handleBookmarkChanged());
+    // Listen to bookmark changes (reload is debounced above)
+    bookmarkManager.onBookmarkChanged(this.debouncedBookmarkReload);
 
     // Setup global error handling for event listeners
     this.setupGlobalErrorHandling();
@@ -646,26 +656,22 @@ export class UIManager {
     const currentSpaceId = spaceManager.getCurrentSpaceId();
     if (!currentSpaceId) return;
 
-    const currentSpace = spaceManager.getCurrentSpace();
-    if (!currentSpace) return;
-
-    // Create bookmark
+    // Create the bookmark; the bookmark change event triggers the debounced
+    // reload that refreshes the list, so there is no manual re-read here.
     await bookmarkManager.createBookmark(currentSpaceId, data.title, data.url);
 
-    // Refresh bookmarks
-    currentSpace.bookmarks = await bookmarkManager.getFolderBookmarks(currentSpaceId);
-    this.renderBookmarks(currentSpace.bookmarks);
-
-    // Close the tab
+    // Close the tab; the onRemoved listener removes it from the space.
     try {
       await chrome.tabs.remove(Number(data.id));
     } catch (error) {
+      // The tab is already gone (or cannot be closed), so onRemoved will not
+      // fire for it — fall back to dropping it from the space directly.
       logger.warn('UIManager', 'Error closing tab after drop', {
         tabId: data.id,
         error: error instanceof Error ? error.message : String(error),
       });
+      await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
     }
-    await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
   }
 
   /**
@@ -695,7 +701,7 @@ export class UIManager {
       // Dropped a tab: create a new bookmark
       await bookmarkManager.createBookmark(pinFolder.id, data.title, data.url);
 
-      // Close the tab and remove it from its space (mirrors handleTabDrop)
+      // Close the tab; the onRemoved listener removes it from its space
       try {
         await chrome.tabs.remove(Number(data.id));
       } catch (error) {
@@ -703,25 +709,16 @@ export class UIManager {
           tabId: data.id,
           error: error instanceof Error ? error.message : String(error),
         });
-      }
-      const currentSpaceId = spaceManager.getCurrentSpaceId();
-      if (currentSpaceId) {
-        await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
+        const currentSpaceId = spaceManager.getCurrentSpaceId();
+        if (currentSpaceId) {
+          await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
+        }
       }
     }
 
-    // Refresh pinned bookmarks
-    await spaceManager.loadPinnedBookmarks();
-    this.renderPinnedBookmarks(spaceManager.getPinnedBookmarks());
-
-    // If a bookmark was moved, refresh the current space's bookmark list too
-    if (typeof data.id === 'string') {
-      const currentSpace = spaceManager.getCurrentSpace();
-      if (currentSpace) {
-        currentSpace.bookmarks = currentSpace.bookmarks.filter((b) => b.id !== data.id);
-        this.renderBookmarks(currentSpace.bookmarks);
-      }
-    }
+    // The bookmark change event (onCreated / onMoved) triggers the debounced
+    // reload, which refreshes both the pinned list and the current space's
+    // bookmark list. No manual re-read here.
   }
 
   /**
@@ -845,6 +842,7 @@ export class UIManager {
    * Destroy the UI manager
    */
   destroy(): void {
+    this.debouncedBookmarkReload.cancel();
     this.closeContextMenu();
     this.dialogs.destroy();
     this.pinnedList.destroy();

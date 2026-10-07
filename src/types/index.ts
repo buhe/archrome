@@ -155,6 +155,7 @@ export interface Config {
   heartbeatInterval: number;
   storageDebounceMs: number;
   switchDebounceMs: number;
+  bookmarkReloadDebounceMs: number;
   cleanupInterval: number;
   staleTimeout: number;
 }
@@ -172,6 +173,7 @@ export const DEFAULT_CONFIG: Config = {
   heartbeatInterval: 120000,
   storageDebounceMs: 300,
   switchDebounceMs: 300,
+  bookmarkReloadDebounceMs: 500,
   cleanupInterval: 300000,
   staleTimeout: 30000,
 } as const;

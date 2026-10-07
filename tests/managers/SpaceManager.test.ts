@@ -268,6 +268,41 @@ describe('SpaceManager', () => {
     });
   });
 
+  describe('reloadBookmarks', () => {
+    it('reloads spaces and pinned bookmarks', async () => {
+      chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
+      chrome.bookmarks.getSubTree.mockResolvedValue([
+        { id: 's1', title: 'Work', children: [{ id: 'b1', title: 'G', url: 'https://g.com' }] },
+      ]);
+
+      await sm.reloadBookmarks();
+      expect(sm.getSpaces().map((s) => s.id)).toEqual(['s1', 's2']);
+      expect(sm.getPinnedBookmarks()).toHaveLength(1);
+    });
+
+    it('serializes concurrent reloads instead of interleaving them', async () => {
+      let releaseTree!: (tree: BookmarkTreeNode[]) => void;
+      const blockedTree = new Promise<BookmarkTreeNode[]>((resolve) => {
+        releaseTree = resolve;
+      });
+      chrome.bookmarks.getTree.mockImplementation(() => blockedTree);
+
+      const first = sm.reloadBookmarks();
+      const second = sm.reloadBookmarks();
+
+      // The first reload blocks on the bookmark tree; the second must not
+      // start reading until the first finished (each full reload reads the
+      // tree twice: once for spaces, once for pinned bookmarks)
+      await vi.waitFor(() => {
+        expect(chrome.bookmarks.getTree).toHaveBeenCalledTimes(1);
+      });
+
+      releaseTree(SPACES_TREE());
+      await Promise.all([first, second]);
+      expect(chrome.bookmarks.getTree).toHaveBeenCalledTimes(4);
+    });
+  });
+
   describe('switching', () => {
     it('switchSpace ignores switching to the current space', async () => {
       const a = await sm.createSpace('A');

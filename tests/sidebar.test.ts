@@ -65,7 +65,11 @@ vi.mock('@utils/index', () => ({
 import { initializeApp } from '@/../src/sidebar';
 
 describe('sidebar.initializeApp retry path', () => {
-  beforeEach(() => {
+  // setupTabEventListeners is idempotent via module-level state, so each
+  // test needs a freshly loaded sidebar module.
+  let initializeAppFresh: typeof initializeApp;
+
+  beforeEach(async () => {
     // Minimal DOM so any stray getElementById won't blow up.
     document.body.innerHTML = '';
 
@@ -74,6 +78,9 @@ describe('sidebar.initializeApp retry path', () => {
 
     // By default, delay resolves immediately so the 2s retry fires at once.
     delayMock.mockResolvedValue(undefined);
+
+    vi.resetModules();
+    ({ initializeApp: initializeAppFresh } = await import('@/../src/sidebar'));
   });
 
   afterEach(() => {
@@ -87,7 +94,7 @@ describe('sidebar.initializeApp retry path', () => {
       destroy: vi.fn(),
     }));
 
-    await initializeApp();
+    await initializeAppFresh();
 
     expect(spaceManager.initialize).toHaveBeenCalledTimes(1);
     expect(tabManager.onTabCreated).toHaveBeenCalledTimes(1);
@@ -109,7 +116,7 @@ describe('sidebar.initializeApp retry path', () => {
     // timer run but flush it deterministically with fake timers.
     vi.useFakeTimers();
 
-    const promise = initializeApp();
+    const promise = initializeAppFresh();
 
     // First attempt fails synchronously-ish; the catch schedules the retry.
     // Allow microtasks (including the rejection handler) to flush.
@@ -130,6 +137,50 @@ describe('sidebar.initializeApp retry path', () => {
     await promise;
 
     // Retry succeeded → listeners MUST now be registered. This is the fix.
+    expect(spaceManager.initialize).toHaveBeenCalledTimes(2);
+    expect(tabManager.onTabCreated).toHaveBeenCalledTimes(1);
+    expect(tabManager.onTabRemoved).toHaveBeenCalledTimes(1);
+    expect(tabManager.onTabUpdated).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
+
+  it('does not double-register listeners when the first attempt fails after registration', async () => {
+    // initialize() succeeds, listeners are registered, but the first
+    // updateState() render throws. The retry calls setupTabEventListeners()
+    // again — duplicate listeners would double-handle every tab event.
+    spaceManager.initialize.mockResolvedValue(undefined);
+    let instances = 0;
+    UIManagerMock.mockImplementation(() => {
+      instances += 1;
+      return {
+        updateState:
+          instances === 1 ? vi.fn(() => { throw new Error('render failed'); }) : vi.fn(),
+        destroy: vi.fn(),
+      };
+    });
+
+    // The init path chains several awaits (API wait, delays, initialize);
+    // flush enough microtask ticks for the first attempt to settle.
+    const flushMicrotasks = async (times = 10): Promise<void> => {
+      for (let i = 0; i < times; i++) {
+        await Promise.resolve();
+      }
+    };
+
+    vi.useFakeTimers();
+
+    const promise = initializeAppFresh();
+    await flushMicrotasks();
+
+    // First attempt registered the listeners, then failed in updateState().
+    expect(tabManager.onTabCreated).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await flushMicrotasks();
+    await promise;
+
+    // Retry must NOT register them a second time.
     expect(spaceManager.initialize).toHaveBeenCalledTimes(2);
     expect(tabManager.onTabCreated).toHaveBeenCalledTimes(1);
     expect(tabManager.onTabRemoved).toHaveBeenCalledTimes(1);

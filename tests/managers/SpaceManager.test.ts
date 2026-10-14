@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SpaceManager } from '@managers/SpaceManager';
+import { storageManager } from '@managers/StorageManager';
 import { EventType } from '@types/index';
 import type { BookmarkTreeNode, Space } from '@types/index';
 
@@ -44,9 +45,6 @@ describe('SpaceManager', () => {
   describe('loading', () => {
     it('loadSpaces builds spaces from bookmark folders, excluding the pin folder', async () => {
       chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
-      chrome.bookmarks.getSubTree.mockResolvedValue([
-        { id: 's1', title: 'Work', children: [{ id: 'b1', title: 'G', url: 'https://g.com' }] },
-      ]);
 
       await sm.loadSpaces();
       const spaces = sm.getSpaces();
@@ -54,6 +52,7 @@ describe('SpaceManager', () => {
       expect(spaces[0].name).toBe('Work');
       expect(spaces[0].icon).toBe('😀');
       expect(spaces[0].bookmarks).toHaveLength(1);
+      expect(chrome.bookmarks.getSubTree).not.toHaveBeenCalled();
     });
 
     it('loadPinnedBookmarks reads pinned bookmarks', async () => {
@@ -124,7 +123,6 @@ describe('SpaceManager', () => {
   describe('hide / show', () => {
     it('loadSpaces excludes hidden spaces and lists them via getHiddenSpaces', async () => {
       chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
-      chrome.bookmarks.getSubTree.mockResolvedValue([{ id: 'x', title: '', children: [] }]);
       await chrome.storage.local.set({ archrome_hidden_spaces: ['s1', 'pin'] });
 
       await sm.loadSpaces();
@@ -171,7 +169,6 @@ describe('SpaceManager', () => {
 
     it('showSpace restores a hidden space and clears the hidden state', async () => {
       chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
-      chrome.bookmarks.getSubTree.mockResolvedValue([{ id: 'x', title: '', children: [] }]);
       await chrome.storage.local.set({ archrome_hidden_spaces: ['s1'] });
       await sm.loadSpaces();
       expect(sm.hasSpace('s1')).toBe(false);
@@ -247,6 +244,34 @@ describe('SpaceManager', () => {
       expect(sm.getCurrentSpace()?.openTabs.find((t) => t.id === 50)?.title).toBe('Y');
     });
 
+    it('updateTabInSpace is a no-op when nothing observable changed (dirty check)', async () => {
+      const space = await sm.createSpace('Work');
+      await sm.switchSpace(space!.id);
+      await sm.addTabToCurrentSpace({ id: 50, url: 'https://x.com', title: 'X' } as chrome.tabs.Tab);
+
+      const listener = vi.fn();
+      sm.on(EventType.TABS_UPDATED, listener);
+      const storeSpy = vi.spyOn(storageManager, 'storeTabs');
+
+      // Same url/title/favIconUrl — onUpdated fires like this on every page
+      // load; without the dirty check each one writes storage and re-renders.
+      await sm.updateTabInSpace(
+        space!.id,
+        { id: 50, url: 'https://x.com', title: 'X', favIconUrl: null } as chrome.tabs.Tab,
+      );
+
+      expect(listener).not.toHaveBeenCalled();
+      expect(storeSpy).not.toHaveBeenCalled();
+
+      // An actual change still updates, persists and emits
+      await sm.updateTabInSpace(
+        space!.id,
+        { id: 50, url: 'https://x.com', title: 'Changed', favIconUrl: null } as chrome.tabs.Tab,
+      );
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(storeSpy).toHaveBeenCalledTimes(1);
+    });
+
     it('moveTabToSpace moves a tab between spaces', async () => {
       const a = (await sm.createSpace('A'))!;
       const b = (await sm.createSpace('B'))!;
@@ -271,13 +296,21 @@ describe('SpaceManager', () => {
   describe('reloadBookmarks', () => {
     it('reloads spaces and pinned bookmarks', async () => {
       chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
-      chrome.bookmarks.getSubTree.mockResolvedValue([
-        { id: 's1', title: 'Work', children: [{ id: 'b1', title: 'G', url: 'https://g.com' }] },
-      ]);
 
       await sm.reloadBookmarks();
       expect(sm.getSpaces().map((s) => s.id)).toEqual(['s1', 's2']);
       expect(sm.getPinnedBookmarks()).toHaveLength(1);
+    });
+
+    it('derives everything from one getTree — no per-folder getSubTree (N+1 guard)', async () => {
+      chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
+
+      await sm.reloadBookmarks();
+
+      expect(chrome.bookmarks.getTree).toHaveBeenCalledTimes(1);
+      expect(chrome.bookmarks.getSubTree).not.toHaveBeenCalled();
+      // bookmarks come from the tree snapshot's children
+      expect(sm.getSpace('s1')?.bookmarks).toHaveLength(1);
     });
 
     it('serializes concurrent reloads instead of interleaving them', async () => {
@@ -292,14 +325,14 @@ describe('SpaceManager', () => {
 
       // The first reload blocks on the bookmark tree; the second must not
       // start reading until the first finished (each full reload reads the
-      // tree twice: once for spaces, once for pinned bookmarks)
+      // tree exactly once, shared between spaces and pinned bookmarks)
       await vi.waitFor(() => {
         expect(chrome.bookmarks.getTree).toHaveBeenCalledTimes(1);
       });
 
       releaseTree(SPACES_TREE());
       await Promise.all([first, second]);
-      expect(chrome.bookmarks.getTree).toHaveBeenCalledTimes(4);
+      expect(chrome.bookmarks.getTree).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -425,7 +458,6 @@ describe('SpaceManager', () => {
   describe('initialize', () => {
     it('switches to the last active space when it still exists', async () => {
       chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
-      chrome.bookmarks.getSubTree.mockResolvedValue([{ id: 'x', title: '', children: [] }]);
       await sm.loadSpaces();
       await chrome.storage.local.set({ last_active_space_id: 's2' });
 
@@ -435,7 +467,6 @@ describe('SpaceManager', () => {
 
     it('falls back to the first space when last active is missing', async () => {
       chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
-      chrome.bookmarks.getSubTree.mockResolvedValue([{ id: 'x', title: '', children: [] }]);
       await sm.loadSpaces();
       await chrome.storage.local.set({ last_active_space_id: 'gone' });
 
@@ -445,7 +476,6 @@ describe('SpaceManager', () => {
 
     it('falls back to a visible space when the last active space is hidden', async () => {
       chrome.bookmarks.getTree.mockResolvedValue(SPACES_TREE());
-      chrome.bookmarks.getSubTree.mockResolvedValue([{ id: 'x', title: '', children: [] }]);
       await chrome.storage.local.set({ last_active_space_id: 's1', archrome_hidden_spaces: ['s1'] });
 
       await sm.initialize();

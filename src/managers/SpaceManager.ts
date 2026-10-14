@@ -3,7 +3,14 @@
  * Handles space loading, switching, and tab synchronization
  */
 
-import type { Space, BookmarkData, SwitchMetric, AppEvent, EventListener } from '@types/index';
+import type {
+  Space,
+  BookmarkData,
+  BookmarkTreeNode,
+  SwitchMetric,
+  AppEvent,
+  EventListener,
+} from '@types/index';
 import { EventType, SwitchStatus, DEFAULT_CONFIG } from '@types/index';
 import { debounce, delay } from '@utils/index';
 import { logger } from '@utils/index';
@@ -98,10 +105,16 @@ export class SpaceManager {
    * Load all spaces from bookmark folders
    * Hidden spaces (by ID) stay out of the visible list but are tracked
    * separately so they can be restored later
+   *
+   * A bookmarks bar snapshot can be passed in so a full reload shares one
+   * getTree between spaces and pinned bookmarks. Bookmarks are derived from
+   * the snapshot's children — per-folder getSubTree reads would turn every
+   * reload into an N+1 bookmark API storm.
    */
-  async loadSpaces(): Promise<void> {
+  async loadSpaces(bookmarkBar?: BookmarkTreeNode | null): Promise<void> {
     try {
-      const folders = await bookmarkManager.getSpaceFolders();
+      const bar = bookmarkBar !== undefined ? bookmarkBar : await bookmarkManager.getBookmarksBar();
+      const folders = (bar?.children ?? []).filter((node) => node.children !== undefined);
       const hiddenIds = new Set(await storageManager.getHiddenSpaceIds());
       const isHidden = (folderId: string) => hiddenIds.has(folderId);
 
@@ -115,7 +128,7 @@ export class SpaceManager {
           .filter((folder) => !bookmarkManager.isPinFolder(folder) && !isHidden(folder.id))
           .map(async (folder) => {
             const spaceInfo = bookmarkManager.folderToSpace(folder);
-            const bookmarks = await bookmarkManager.getFolderBookmarks(folder.id);
+            const bookmarks = bookmarkManager.childrenToBookmarks(folder.children);
             const storedTabs = await storageManager.getStoredTabs(folder.id);
 
             return {
@@ -146,11 +159,11 @@ export class SpaceManager {
   }
 
   /**
-   * Load pinned bookmarks
+   * Load pinned bookmarks (shares an optional bookmarks bar snapshot)
    */
-  async loadPinnedBookmarks(): Promise<void> {
+  async loadPinnedBookmarks(bookmarkBar?: BookmarkTreeNode | null): Promise<void> {
     try {
-      this.state.pinnedBookmarks = await bookmarkManager.getPinnedBookmarks();
+      this.state.pinnedBookmarks = await bookmarkManager.getPinnedBookmarks(bookmarkBar);
       logger.debug('SpaceManager', 'Pinned bookmarks loaded', {
         count: this.state.pinnedBookmarks.length,
       });
@@ -340,25 +353,19 @@ export class SpaceManager {
     const stepStart = Date.now();
 
     try {
-      const currentTabs = await tabManager.getAllTabs();
-      const currentTabIds = new Set(currentTabs.map((t) => t.id));
-      const tabsToClose = oldSpace.openTabs.filter((t) => currentTabIds.has(t.id));
-
-      logger.info('SpaceManager', 'Closing old space tabs', {
-        totalOldTabs: oldSpace.openTabs.length,
-        tabsToClose: tabsToClose.length,
-      });
-
       // Record ids before closing: onRemoved events for these tabs may be
       // delivered after the switch has finished (isSwitching is already
       // false again), and the sidebar handler must not purge them from the
-      // space's stored tabs.
+      // space's stored tabs. Ids of tabs that are already gone are harmless
+      // — no event fires for them and the grace window expires them.
       const closedAt = Date.now();
-      for (const tab of tabsToClose) {
+      for (const tab of oldSpace.openTabs) {
         this.recentlyClosedTabIds.set(tab.id, closedAt);
       }
 
-      const closedCount = await tabManager.closeTabsBatch(tabsToClose.map((t) => t.id));
+      // closeTabsBatch itself filters out tabs that are no longer open, so
+      // no separate getAllTabs query is needed here.
+      const closedCount = await tabManager.closeTabsBatch(oldSpace.openTabs.map((t) => t.id));
 
       logger.info('SpaceManager', 'Old space tabs closed', {
         count: closedCount,
@@ -700,18 +707,32 @@ export class SpaceManager {
     }
 
     const tabIndex = space.openTabs.findIndex((t) => t.id === tab.id);
-
-    if (tabIndex !== -1) {
-      space.openTabs[tabIndex] = tabManager.chromeTabToTabData(tab);
-      await storageManager.storeTabs(spaceId, space.openTabs);
-
-      this.emitEvent({
-        type: EventType.TABS_UPDATED,
-        timestamp: Date.now(),
-        spaceId,
-        tabs: space.openTabs,
-      });
+    if (tabIndex === -1) {
+      return;
     }
+
+    const updated = tabManager.chromeTabToTabData(tab);
+    const current = space.openTabs[tabIndex];
+
+    // onUpdated fires for every page load; skip the storage write and the
+    // full-list re-render when nothing observable changed.
+    if (
+      current.url === updated.url &&
+      current.title === updated.title &&
+      current.favIconUrl === updated.favIconUrl
+    ) {
+      return;
+    }
+
+    space.openTabs[tabIndex] = updated;
+    await storageManager.storeTabs(spaceId, space.openTabs);
+
+    this.emitEvent({
+      type: EventType.TABS_UPDATED,
+      timestamp: Date.now(),
+      spaceId,
+      tabs: space.openTabs,
+    });
   }
 
   /**
@@ -785,8 +806,10 @@ export class SpaceManager {
       return;
     }
 
-    await this.loadSpaces();
-    await this.loadPinnedBookmarks();
+    // One getTree snapshot feeds both the spaces and the pinned bookmarks
+    const bookmarkBar = await bookmarkManager.getBookmarksBar();
+    await this.loadSpaces(bookmarkBar);
+    await this.loadPinnedBookmarks(bookmarkBar);
   }
 
   /**

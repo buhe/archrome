@@ -59,12 +59,6 @@ describe('BookmarkManager', () => {
       expect(await bm.getBookmarksBar()).toBeNull();
     });
 
-    it('getSpaceFolders returns only folders (nodes with children)', async () => {
-      vi.spyOn(chrome.bookmarks, 'getTree').mockResolvedValueOnce(TREE_WITH_SPACES());
-      const folders = await bm.getSpaceFolders();
-      expect(folders.map((f) => f.id)).toEqual(['10', '11', '12']);
-    });
-
     it('getPinFolder finds the pin folder case-insensitively', async () => {
       vi.spyOn(chrome.bookmarks, 'getTree').mockResolvedValueOnce(TREE_WITH_SPACES());
       const pin = await bm.getPinFolder();
@@ -78,26 +72,18 @@ describe('BookmarkManager', () => {
   });
 
   describe('folder bookmarks', () => {
-    it('getFolderBookmarks returns only url nodes', async () => {
-      vi.spyOn(chrome.bookmarks, 'getSubTree').mockResolvedValueOnce([
-        {
-          id: '10',
-          title: 'Work',
-          children: [
-            { id: 'a', title: 'A', url: 'https://a.com', dateAdded: 1 },
-            { id: 'b', title: 'Sub', children: [] },
-            { id: 'c', title: 'C', url: 'https://c.com' },
-          ],
-        },
+    it('childrenToBookmarks returns only url nodes', () => {
+      const bookmarks = bm.childrenToBookmarks([
+        { id: 'a', title: 'A', url: 'https://a.com', dateAdded: 1 },
+        { id: 'b', title: 'Sub', children: [] },
+        { id: 'c', title: 'C', url: 'https://c.com' },
       ]);
-      const bookmarks = await bm.getFolderBookmarks('10');
       expect(bookmarks).toHaveLength(2);
       expect(bookmarks[0]).toMatchObject({ id: 'a', url: 'https://a.com' });
     });
 
-    it('getFolderBookmarks returns [] on error', async () => {
-      vi.spyOn(chrome.bookmarks, 'getSubTree').mockRejectedValueOnce(new Error('x'));
-      expect(await bm.getFolderBookmarks('10')).toEqual([]);
+    it('childrenToBookmarks handles undefined children', () => {
+      expect(bm.childrenToBookmarks(undefined)).toEqual([]);
     });
 
     it('getPinnedBookmarks reads from the pin folder', async () => {

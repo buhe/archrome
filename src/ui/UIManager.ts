@@ -120,35 +120,6 @@ export class UIManager {
 
     // Listen to bookmark changes (reload is debounced above)
     bookmarkManager.onBookmarkChanged(this.debouncedBookmarkReload);
-
-    // Setup global error handling for event listeners
-    this.setupGlobalErrorHandling();
-  }
-
-  /**
-   * Setup global error handling to prevent crashes
-   */
-  private setupGlobalErrorHandling(): void {
-    // Handle uncaught errors in event callbacks
-    window.addEventListener('error', (event) => {
-      logger.error('UIManager', 'Uncaught error', {
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        error: event.error?.message ?? String(event.error),
-      });
-    });
-
-    // Handle unhandled promise rejections
-    window.addEventListener('unhandledrejection', (event) => {
-      logger.error('UIManager', 'Unhandled promise rejection', {
-        reason: event.reason,
-      });
-
-      // Prevent the rejection from causing an unhandled exception
-      event.preventDefault();
-    });
   }
 
   /**

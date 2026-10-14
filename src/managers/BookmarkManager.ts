@@ -90,26 +90,6 @@ export class BookmarkManager {
   }
 
   /**
-   * Get all folder children of the Bookmarks Bar (spaces)
-   */
-  async getSpaceFolders(): Promise<BookmarkTreeNode[]> {
-    try {
-      const bookmarkBar = await this.getBookmarksBar();
-      if (!bookmarkBar?.children) {
-        return [];
-      }
-
-      // Return only folders (nodes with children)
-      return bookmarkBar.children.filter((node) => node.children !== undefined);
-    } catch (error) {
-      logger.error('BookmarkManager', 'Error getting space folders', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
-  }
-
-  /**
    * Get the "pin" folder for pinned bookmarks
    */
   async getPinFolder(): Promise<BookmarkTreeNode | null> {
@@ -133,29 +113,25 @@ export class BookmarkManager {
   }
 
   /**
-   * Get bookmarks for a specific folder
+   * Get pinned bookmarks from the "pin" folder
+   * An already-fetched bookmarks bar snapshot can be passed in so callers
+   * that read spaces and pins together pay for a single getTree.
    */
-  async getFolderBookmarks(folderId: string): Promise<BookmarkData[]> {
+  async getPinnedBookmarks(bookmarkBar?: BookmarkTreeNode | null): Promise<BookmarkData[]> {
     try {
-      const subtree = await chrome.bookmarks.getSubTree(folderId);
-      if (!subtree[0]?.children) {
+      const bar = bookmarkBar !== undefined ? bookmarkBar : await this.getBookmarksBar();
+      const pinFolder = bar?.children?.find(
+        (node) => node.title.toLowerCase() === this.pinFolderName && node.children,
+      );
+
+      if (!pinFolder) {
+        logger.debug('BookmarkManager', 'No pin folder found');
         return [];
       }
 
-      // Return only actual bookmarks (nodes with URLs)
-      return subtree[0].children
-        .filter((node) => node.url !== undefined)
-        .map((node) => ({
-          id: node.id,
-          title: node.title,
-          url: node.url ?? '',
-          dateAdded: node.dateAdded,
-          index: node.index,
-          parentId: node.parentId,
-        }));
+      return this.childrenToBookmarks(pinFolder.children);
     } catch (error) {
-      logger.error('BookmarkManager', 'Error getting folder bookmarks', {
-        folderId,
+      logger.error('BookmarkManager', 'Error getting pinned bookmarks', {
         error: error instanceof Error ? error.message : String(error),
       });
       return [];
@@ -163,32 +139,21 @@ export class BookmarkManager {
   }
 
   /**
-   * Get pinned bookmarks from the "pin" folder
+   * Convert a folder's direct children to bookmark data (URL nodes only).
+   * The tree returned by getTree already contains every folder's children,
+   * so callers holding a tree node never need a per-folder getSubTree.
    */
-  async getPinnedBookmarks(): Promise<BookmarkData[]> {
-    try {
-      const pinFolder = await this.getPinFolder();
-      if (!pinFolder) {
-        logger.debug('BookmarkManager', 'No pin folder found');
-        return [];
-      }
-
-      return pinFolder.children
-        ?.filter((node) => node.url !== undefined)
-        .map((node) => ({
-          id: node.id,
-          title: node.title,
-          url: node.url ?? '',
-          dateAdded: node.dateAdded,
-          index: node.index,
-          parentId: node.parentId,
-        })) ?? [];
-    } catch (error) {
-      logger.error('BookmarkManager', 'Error getting pinned bookmarks', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return [];
-    }
+  childrenToBookmarks(children: BookmarkTreeNode[] | undefined): BookmarkData[] {
+    return (children ?? [])
+      .filter((node) => node.url !== undefined)
+      .map((node) => ({
+        id: node.id,
+        title: node.title,
+        url: node.url ?? '',
+        dateAdded: node.dateAdded,
+        index: node.index,
+        parentId: node.parentId,
+      }));
   }
 
   /**

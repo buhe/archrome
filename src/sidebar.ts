@@ -112,8 +112,18 @@ export async function initializeApp(): Promise<void> {
 
 /**
  * Setup tab event listeners
+ * Idempotent: the init retry path runs setupTabEventListeners() again when
+ * the first attempt failed after registration — duplicate listeners would
+ * double-handle every tab event (double space writes, double renders).
  */
+let tabListenersRegistered = false;
+
 function setupTabEventListeners(): void {
+  if (tabListenersRegistered) {
+    return;
+  }
+  tabListenersRegistered = true;
+
   // Handle tab creation
   tabManager.onTabCreated(async (tab) => {
     if (spaceManager.isSwitching()) {
@@ -146,17 +156,10 @@ function setupTabEventListeners(): void {
       return;
     }
 
-    const currentSpaceId = spaceManager.getCurrentSpaceId();
-    if (currentSpaceId) {
-      await spaceManager.removeTabFromSpace(currentSpaceId, tabId);
-    }
-
-    // Also remove from inactive spaces
-    const spaces = spaceManager.getSpaces();
-    for (const space of spaces) {
-      if (space.id !== currentSpaceId) {
-        await spaceManager.removeTabFromSpace(space.id, tabId);
-      }
+    // A tab is tracked by at most one space; purge it from whichever space
+    // (current or inactive) still lists it.
+    for (const space of spaceManager.getSpaces()) {
+      await spaceManager.removeTabFromSpace(space.id, tabId);
     }
   });
 

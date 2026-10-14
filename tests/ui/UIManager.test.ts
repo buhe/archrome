@@ -32,7 +32,6 @@ const { spaceManager, bookmarkManager, storageManager } = vi.hoisted(() => ({
   bookmarkManager: {
     onBookmarkChanged: vi.fn(),
     deleteBookmark: vi.fn(async () => true),
-    getFolderBookmarks: vi.fn(async () => []),
     createBookmark: vi.fn(async () => null),
     getPinFolder: vi.fn(async () => null),
     getBookmarksBar: vi.fn(async () => null),
@@ -592,9 +591,8 @@ describe('UIManager', () => {
       });
 
       expect(bookmarkManager.createBookmark).toHaveBeenCalledWith('1', 'T', 'https://t.com');
-      // No manual re-read and no duplicate space removal: the debounced
-      // bookmark-event reload and the onRemoved listener own those.
-      expect(bookmarkManager.getFolderBookmarks).not.toHaveBeenCalled();
+      // No duplicate space removal: the debounced bookmark-event reload and
+      // the onRemoved listener own the refresh and the tab purge.
       expect(spaceManager.removeTabFromSpace).not.toHaveBeenCalled();
     });
 

@@ -21,6 +21,9 @@ const { spaceManager, bookmarkManager, storageManager } = vi.hoisted(() => ({
     switchSpace: vi.fn(async () => undefined),
     createAndSwitchSpace: vi.fn(async () => ({ id: '9', icon: '●', name: 'NewSpace', bookmarks: [], openTabs: [] })),
     deleteSpace: vi.fn(async () => true),
+    hideSpace: vi.fn(async () => true),
+    showSpace: vi.fn(async () => true),
+    getHiddenSpaces: vi.fn(() => []),
     reloadBookmarks: vi.fn(async () => undefined),
     moveTabToSpace: vi.fn(async () => true),
     removeTabFromSpace: vi.fn(async () => undefined),
@@ -34,6 +37,7 @@ const { spaceManager, bookmarkManager, storageManager } = vi.hoisted(() => ({
     getPinFolder: vi.fn(async () => null),
     getBookmarksBar: vi.fn(async () => null),
     createFolder: vi.fn(async () => null),
+    moveBookmark: vi.fn(async () => true),
   },
   storageManager: {
     getTheme: vi.fn(async () => null),
@@ -49,7 +53,7 @@ vi.mock('@managers/index', () => ({
 }));
 
 import { UIManager } from '@ui/UIManager';
-import { EventType } from '@types/index';
+import { EventType, DEFAULT_CONFIG } from '@types/index';
 import type { Space, BookmarkData, TabData } from '@types/index';
 
 function setupDom() {
@@ -96,6 +100,7 @@ describe('UIManager', () => {
     ui?.destroy();
     document.body.innerHTML = '';
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   function handlerFor(type: EventType) {
@@ -129,15 +134,37 @@ describe('UIManager', () => {
       (document.querySelector('#spaces-list li') as HTMLElement).click();
       expect(spaceManager.triggerSwitch).toHaveBeenCalledWith('1');
     });
+  });
 
-    it('opens a delete context menu on right-click and deletes when confirmed', async () => {
-      ui.renderSpaces([{ id: '1', icon: '😀', name: 'Work', bookmarks: [], openTabs: [] }], null);
-      const li = document.querySelector('#spaces-list li') as HTMLElement;
-      li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+  /**
+   * Open the space context menu on the given space and return its items
+   */
+  function openSpaceContextMenu(space: Space) {
+    ui.renderSpaces([space], null);
+    const li = document.querySelector('#spaces-list li') as HTMLElement;
+    li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
 
-      const item = document.querySelector('.custom-context-menu .context-menu-item') as HTMLElement;
-      expect(item).toBeTruthy();
-      item.click();
+    return [...document.querySelectorAll('.custom-context-menu .context-menu-item')];
+  }
+
+  /**
+   * Find a top-level context menu item by its label text
+   */
+  function findMenuItem(items: HTMLElement[], label: string): HTMLElement {
+    const item = items.find((el) => el.querySelector('.context-menu-label')?.textContent === label);
+    expect(item).toBeTruthy();
+    return item!;
+  }
+
+  describe('space context menu', () => {
+    const WORK: Space = { id: '1', icon: '😀', name: 'Work', bookmarks: [], openTabs: [] };
+    const HOME: Space = { id: '2', icon: '🏠', name: 'Home', bookmarks: [], openTabs: [] };
+
+    it('opens with Hide as the first item and deletes when confirmed', async () => {
+      const items = openSpaceContextMenu(WORK);
+      expect(items[0].textContent).toContain('Hide');
+
+      findMenuItem(items, 'Delete space').click();
 
       // Confirmation now uses the in-panel dialog instead of window.confirm
       await vi.waitFor(() => {
@@ -151,10 +178,8 @@ describe('UIManager', () => {
     });
 
     it('does not delete when confirmation is dismissed', async () => {
-      ui.renderSpaces([{ id: '1', icon: '😀', name: 'Work', bookmarks: [], openTabs: [] }], null);
-      const li = document.querySelector('#spaces-list li') as HTMLElement;
-      li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
-      (document.querySelector('.custom-context-menu .context-menu-item') as HTMLElement).click();
+      const items = openSpaceContextMenu(WORK);
+      findMenuItem(items, 'Delete space').click();
 
       await vi.waitFor(() => {
         expect(document.querySelector('.dialog-overlay')).toBeTruthy();
@@ -162,6 +187,82 @@ describe('UIManager', () => {
       (document.querySelector('.dialog-overlay .dialog-btn:not(.dialog-btn-primary)') as HTMLElement).click();
       await new Promise((r) => setTimeout(r, 0));
       expect(spaceManager.deleteSpace).not.toHaveBeenCalled();
+    });
+
+    it('hides the space when Hide is clicked and other spaces remain', async () => {
+      spaceManager.getSpaces.mockReturnValue([WORK, HOME]);
+      const items = openSpaceContextMenu(WORK);
+
+      findMenuItem(items, 'Hide').click();
+
+      await vi.waitFor(() => {
+        expect(spaceManager.hideSpace).toHaveBeenCalledWith('1');
+      });
+      expect(spaceManager.showSpace).not.toHaveBeenCalled();
+    });
+
+    it('refuses to hide the only visible space', async () => {
+      spaceManager.getSpaces.mockReturnValue([WORK]);
+      const items = openSpaceContextMenu(WORK);
+
+      findMenuItem(items, 'Hide').click();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('.dialog-toast')).toBeTruthy();
+      });
+      expect(spaceManager.hideSpace).not.toHaveBeenCalled();
+    });
+
+    it('refuses to hide while a space operation is running', async () => {
+      spaceManager.getSpaces.mockReturnValue([WORK, HOME]);
+      spaceManager.isSwitching.mockReturnValue(true);
+      const items = openSpaceContextMenu(WORK);
+
+      findMenuItem(items, 'Hide').click();
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('.dialog-toast')).toBeTruthy();
+      });
+      expect(spaceManager.hideSpace).not.toHaveBeenCalled();
+    });
+
+    it('lists hidden spaces in the Show hidden submenu and restores them', async () => {
+      spaceManager.getSpaces.mockReturnValue([WORK]);
+      spaceManager.getHiddenSpaces.mockReturnValue([{ id: '9', icon: '●', name: 'Secret' }]);
+      const items = openSpaceContextMenu(WORK);
+
+      const showHidden = findMenuItem(items, 'Show hidden');
+      const subItem = showHidden.querySelector('.context-submenu .context-menu-item') as HTMLElement;
+      expect(subItem?.textContent).toBe('Secret');
+
+      subItem.click();
+
+      await vi.waitFor(() => {
+        expect(spaceManager.showSpace).toHaveBeenCalledWith('9');
+      });
+    });
+
+    it('omits the Show hidden submenu when nothing is hidden', () => {
+      const items = openSpaceContextMenu(WORK);
+      const showHidden = items.find(
+        (el) => el.querySelector('.context-menu-label')?.textContent === 'Show hidden',
+      );
+      expect(showHidden).toBeUndefined();
+    });
+
+    it('re-renders the spaces list on SPACE_HIDDEN and SPACE_SHOWN events', () => {
+      const hiddenHandler = handlerFor(EventType.SPACE_HIDDEN)!;
+      const shownHandler = handlerFor(EventType.SPACE_SHOWN)!;
+
+      spaceManager.getSpaces.mockReturnValue([HOME]);
+      spaceManager.getCurrentSpaceId.mockReturnValue('2');
+
+      hiddenHandler({ type: EventType.SPACE_HIDDEN, timestamp: 0, spaceId: '1' });
+      expect(document.querySelectorAll('#spaces-list li').length).toBe(1);
+
+      spaceManager.getSpaces.mockReturnValue([WORK, HOME]);
+      shownHandler({ type: EventType.SPACE_SHOWN, timestamp: 0, spaceId: '1' });
+      expect(document.querySelectorAll('#spaces-list li').length).toBe(2);
     });
   });
 
@@ -274,31 +375,55 @@ describe('UIManager', () => {
     });
 
     it('handleBookmarkChanged skips reload while switching', async () => {
-      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => Promise<void>;
+      vi.useFakeTimers();
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => void;
       spaceManager.isSwitching.mockReturnValue(true);
-      await cb();
+      cb();
+      await vi.advanceTimersByTimeAsync(DEFAULT_CONFIG.bookmarkReloadDebounceMs + 10);
       expect(spaceManager.reloadBookmarks).not.toHaveBeenCalled();
     });
 
     it('handleBookmarkChanged skips reload while creating a space', async () => {
-      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => Promise<void>;
+      vi.useFakeTimers();
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => void;
       // Bookmark events from space creation arrive while no switch runs yet
       spaceManager.isSwitching.mockReturnValue(false);
       spaceManager.isCreatingSpace.mockReturnValue(true);
-      await cb();
+      cb();
+      await vi.advanceTimersByTimeAsync(DEFAULT_CONFIG.bookmarkReloadDebounceMs + 10);
       expect(spaceManager.reloadBookmarks).not.toHaveBeenCalled();
     });
 
     it('handleBookmarkChanged reloads bookmarks when idle', async () => {
-      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => Promise<void>;
+      vi.useFakeTimers();
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => void;
       spaceManager.isSwitching.mockReturnValue(false);
       spaceManager.isCreatingSpace.mockReturnValue(false);
       spaceManager.getCurrentSpace.mockReturnValue(SPACE);
       spaceManager.getSpaces.mockReturnValue([SPACE]);
       spaceManager.getCurrentSpaceId.mockReturnValue('1');
       spaceManager.getPinnedBookmarks.mockReturnValue([]);
-      await cb();
+      cb();
+      await vi.advanceTimersByTimeAsync(DEFAULT_CONFIG.bookmarkReloadDebounceMs + 10);
       expect(spaceManager.reloadBookmarks).toHaveBeenCalled();
+    });
+
+    it('bursts of bookmark events collapse into a single debounced reload', async () => {
+      vi.useFakeTimers();
+      const cb = bookmarkManager.onBookmarkChanged.mock.calls[0][0] as () => void;
+      spaceManager.isSwitching.mockReturnValue(false);
+      spaceManager.isCreatingSpace.mockReturnValue(false);
+      spaceManager.getCurrentSpace.mockReturnValue(SPACE);
+      spaceManager.getSpaces.mockReturnValue([SPACE]);
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+      spaceManager.getPinnedBookmarks.mockReturnValue([]);
+
+      // One drop can fire several bookmark events in quick succession
+      cb();
+      cb();
+      cb();
+      await vi.advanceTimersByTimeAsync(DEFAULT_CONFIG.bookmarkReloadDebounceMs + 10);
+      expect(spaceManager.reloadBookmarks).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -380,14 +505,17 @@ describe('UIManager', () => {
       spaceManager.getCurrentSpaceId.mockReturnValue('1');
       bookmarkManager.getPinFolder.mockResolvedValueOnce({ id: 'pin1', title: 'pin' });
 
-      dispatchDrop({ id: '50', title: 'T', url: 'https://t.com' });
+      dispatchDrop({ id: 50, title: 'T', url: 'https://t.com' });
       await vi.waitFor(() => {
         expect(chrome.tabs.remove).toHaveBeenCalledWith(50);
       });
 
       expect(bookmarkManager.createBookmark).toHaveBeenCalledWith('pin1', 'T', 'https://t.com');
-      expect(spaceManager.loadPinnedBookmarks).toHaveBeenCalled();
-      expect(spaceManager.removeTabFromSpace).toHaveBeenCalledWith('1', 50);
+      // The onRemoved listener owns the space removal and the debounced
+      // bookmark-event reload owns the re-render; the drop handler must not
+      // duplicate either.
+      expect(spaceManager.removeTabFromSpace).not.toHaveBeenCalled();
+      expect(spaceManager.loadPinnedBookmarks).not.toHaveBeenCalled();
       expect(bookmarkManager.createFolder).not.toHaveBeenCalled();
     });
 
@@ -397,7 +525,7 @@ describe('UIManager', () => {
       bookmarkManager.getBookmarksBar.mockResolvedValueOnce({ id: 'bar1', title: '' });
       bookmarkManager.createFolder.mockResolvedValueOnce({ id: 'newpin', title: 'pin' });
 
-      dispatchDrop({ id: '51', title: 'N', url: 'https://n.com' });
+      dispatchDrop({ id: 51, title: 'N', url: 'https://n.com' });
       await vi.waitFor(() => {
         expect(bookmarkManager.createFolder).toHaveBeenCalledWith('bar1', 'pin');
       });
@@ -408,11 +536,85 @@ describe('UIManager', () => {
       bookmarkManager.getPinFolder.mockResolvedValueOnce(null);
       bookmarkManager.getBookmarksBar.mockResolvedValueOnce(null);
 
-      dispatchDrop({ id: '52', title: 'X', url: 'https://x.com' });
+      dispatchDrop({ id: 52, title: 'X', url: 'https://x.com' });
       await new Promise((r) => setTimeout(r, 0));
 
       expect(bookmarkManager.createBookmark).not.toHaveBeenCalled();
       expect(bookmarkManager.createFolder).not.toHaveBeenCalled();
+      expect(chrome.tabs.remove).not.toHaveBeenCalled();
+    });
+
+    it('moves an existing bookmark into the pin folder without touching tabs', async () => {
+      bookmarkManager.getPinFolder.mockResolvedValueOnce({ id: 'pin1', title: 'pin' });
+
+      dispatchDrop({ id: 'bm1', title: 'B', url: 'https://b.com' });
+      await vi.waitFor(() => {
+        expect(bookmarkManager.moveBookmark).toHaveBeenCalledWith('bm1', 'pin1');
+      });
+
+      expect(bookmarkManager.createBookmark).not.toHaveBeenCalled();
+      expect(chrome.tabs.remove).not.toHaveBeenCalled();
+      expect(spaceManager.loadPinnedBookmarks).not.toHaveBeenCalled();
+    });
+
+    it('falls back to removing the tab from the space when closing fails', async () => {
+      vi.spyOn(chrome.tabs, 'remove').mockRejectedValueOnce(new Error('gone'));
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+      bookmarkManager.getPinFolder.mockResolvedValueOnce({ id: 'pin1', title: 'pin' });
+
+      dispatchDrop({ id: 53, title: 'F', url: 'https://f.com' });
+      await vi.waitFor(() => {
+        expect(spaceManager.removeTabFromSpace).toHaveBeenCalledWith('1', 53);
+      });
+    });
+  });
+
+  describe('drop to bookmarks', () => {
+    function dispatchDrop(payload: unknown) {
+      const ul = document.getElementById('bookmarks-list')!;
+      const dataTransfer = {
+        getData: vi.fn(() => JSON.stringify(payload)),
+        dropEffect: 'none',
+      };
+      const evt = new Event('drop', { bubbles: true }) as DragEvent;
+      Object.defineProperty(evt, 'dataTransfer', { value: dataTransfer });
+      Object.defineProperty(evt, 'preventDefault', { value: vi.fn() });
+      ul.dispatchEvent(evt);
+      return evt;
+    }
+
+    it('creates a bookmark in the current space and closes the tab', async () => {
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+
+      dispatchDrop({ id: 42, title: 'T', url: 'https://t.com' });
+      await vi.waitFor(() => {
+        expect(chrome.tabs.remove).toHaveBeenCalledWith(42);
+      });
+
+      expect(bookmarkManager.createBookmark).toHaveBeenCalledWith('1', 'T', 'https://t.com');
+      // No manual re-read and no duplicate space removal: the debounced
+      // bookmark-event reload and the onRemoved listener own those.
+      expect(bookmarkManager.getFolderBookmarks).not.toHaveBeenCalled();
+      expect(spaceManager.removeTabFromSpace).not.toHaveBeenCalled();
+    });
+
+    it('falls back to removing the tab from the space when closing fails', async () => {
+      vi.spyOn(chrome.tabs, 'remove').mockRejectedValueOnce(new Error('nope'));
+      spaceManager.getCurrentSpaceId.mockReturnValue('1');
+
+      dispatchDrop({ id: 43, title: 'T2', url: 'https://t2.com' });
+      await vi.waitFor(() => {
+        expect(spaceManager.removeTabFromSpace).toHaveBeenCalledWith('1', 43);
+      });
+    });
+
+    it('does nothing without a current space', async () => {
+      spaceManager.getCurrentSpaceId.mockReturnValue(null);
+
+      dispatchDrop({ id: 44, title: 'T3', url: 'https://t3.com' });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(bookmarkManager.createBookmark).not.toHaveBeenCalled();
       expect(chrome.tabs.remove).not.toHaveBeenCalled();
     });
   });

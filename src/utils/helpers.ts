@@ -2,7 +2,7 @@
  * Helper utility functions
  */
 
-import type { TabData, BookmarkData } from '@types/index';
+import type { TabData } from '@types/index';
 
 /**
  * Check if a character is an emoji
@@ -74,7 +74,7 @@ export function cleanTabsData(tabs: TabData[], maxTabs: number): TabData[] {
     id: tab.id,
     url: tab.url,
     title: tab.title || 'Untitled',
-    favIconUrl: tab.favIconUrl || null,
+    favIconUrl: tab.favIconUrl ?? null,
   }));
 }
 
@@ -83,7 +83,7 @@ export function cleanTabsData(tabs: TabData[], maxTabs: number): TabData[] {
  */
 export function getFaviconUrl(tab: TabData | chrome.tabs.Tab): string {
   // For chrome:// URLs, use default icon
-  if (tab.url && tab.url.startsWith('chrome://')) {
+  if (tab.url?.startsWith('chrome://')) {
     return 'icons/default_favicon.png';
   }
 

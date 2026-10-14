@@ -144,7 +144,7 @@ export class TabManager {
           throw new Error('Failed to create tab');
         }
         return tab;
-      }, retries);
+      }, retries, retryDelay);
     } catch (error) {
       logger.error('TabManager', 'Error creating tab with retry', {
         url,
@@ -424,9 +424,9 @@ export class TabManager {
   chromeTabToTabData(tab: chrome.tabs.Tab): TabData {
     return {
       id: tab.id,
-      url: tab.url || tab.pendingUrl || '',
-      title: tab.title || '',
-      favIconUrl: tab.favIconUrl || null,
+      url: tab.url ?? tab.pendingUrl ?? '',
+      title: tab.title ?? '',
+      favIconUrl: tab.favIconUrl ?? null,
     };
   }
 
@@ -435,7 +435,7 @@ export class TabManager {
    */
   filterValidTabs(tabs: chrome.tabs.Tab[]): chrome.tabs.Tab[] {
     return tabs.filter((tab) => {
-      const url = tab.url || tab.pendingUrl;
+      const url = tab.url ?? tab.pendingUrl;
       return isValidUrl(url);
     });
   }

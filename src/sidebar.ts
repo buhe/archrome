@@ -94,9 +94,7 @@ export async function initializeApp(): Promise<void> {
         await delay(200);
 
         await spaceManager.initialize();
-        if (!uiManager) {
-          uiManager = new UIManager();
-        }
+        uiManager ??= new UIManager();
         // 重试路径必须重新注册 tab 事件监听器。
         // 首次初始化失败时 setupTabEventListeners() 不会被执行，
         // 若此处遗漏，扩展在唤醒/冷启动场景下会静默停止跟踪标签页变更。
@@ -125,7 +123,7 @@ function setupTabEventListeners(): void {
     const currentSpaceId = spaceManager.getCurrentSpaceId();
     if (!currentSpaceId) return;
 
-    const initialUrl = tab.url || tab.pendingUrl;
+    const initialUrl = tab.url ?? tab.pendingUrl;
 
     // Skip invalid URLs
     if (!isValidUrl(initialUrl)) {
@@ -173,7 +171,7 @@ function setupTabEventListeners(): void {
 
     // Only update if tab status is complete or URL changed
     if (changeInfo.status === 'complete' || changeInfo.url) {
-      const currentUrl = tab.url || tab.pendingUrl;
+      const currentUrl = tab.url ?? tab.pendingUrl;
 
       // Check if URL is valid before adding/updating the tab
       if (!isValidUrl(currentUrl)) {

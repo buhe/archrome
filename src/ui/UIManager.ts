@@ -3,16 +3,18 @@
  * Handles rendering of bookmarks, tabs, spaces, and pinned items
  */
 
-import type { Space, BookmarkData, TabData, AppEvent, Theme } from '@types/index';
-import { EventType } from '@types/index';
 import { spaceManager } from '@managers/index';
 import { bookmarkManager } from '@managers/index';
-import { tabManager } from '@managers/index';
 import { storageManager } from '@managers/index';
+import { EventType, DEFAULT_CONFIG } from '@types/index';
+import type { Space, BookmarkData, TabData, AppEvent, Theme, ContextMenuItem } from '@types/index';
+import type { DebouncedFunction } from '@utils/index';
+import { isEmoji } from '@utils/index';
+import { debounce } from '@utils/index';
+import { logger } from '@utils/index';
+
 import { ListItemComponent, ListComponent, ContextMenu, LogViewer, DialogManager } from './components';
 import type { ListItemData } from './components/ListItemComponent';
-import { isEmoji, getFaviconUrl, getDisplayText } from '@utils/index';
-import { logger } from '@utils/index';
 
 /**
  * UI Manager class
@@ -30,8 +32,16 @@ export class UIManager {
   private currentContextMenu: ContextMenu | null = null;
   private isRecovering: boolean = false;
   private currentTheme: Theme = 'light';
+  private debouncedBookmarkReload: DebouncedFunction<() => void>;
 
   constructor() {
+    // Bookmark events arrive in bursts (a single tab drop fires onCreated plus
+    // the tab's onRemoved cascade). Debounce the full reload so a burst
+    // collapses into one getTree + per-space read instead of one per event.
+    this.debouncedBookmarkReload = debounce(
+      () => void this.handleBookmarkChanged(),
+      DEFAULT_CONFIG.bookmarkReloadDebounceMs,
+    );
     // Initialize list components
     this.pinnedList = new ListComponent({
       containerId: 'pinned-list',
@@ -105,9 +115,11 @@ export class UIManager {
     spaceManager.on(EventType.BOOKMARKS_UPDATED, this.handleBookmarksUpdated.bind(this));
     spaceManager.on(EventType.SPACE_CREATED, this.handleSpaceCreated.bind(this));
     spaceManager.on(EventType.SPACE_DELETED, this.handleSpaceDeleted.bind(this));
+    spaceManager.on(EventType.SPACE_HIDDEN, this.handleSpaceHidden.bind(this));
+    spaceManager.on(EventType.SPACE_SHOWN, this.handleSpaceShown.bind(this));
 
-    // Listen to bookmark changes
-    bookmarkManager.onBookmarkChanged(() => this.handleBookmarkChanged());
+    // Listen to bookmark changes (reload is debounced above)
+    bookmarkManager.onBookmarkChanged(this.debouncedBookmarkReload);
 
     // Setup global error handling for event listeners
     this.setupGlobalErrorHandling();
@@ -124,7 +136,7 @@ export class UIManager {
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
-        error: event.error?.message || String(event.error),
+        error: event.error?.message ?? String(event.error),
       });
     });
 
@@ -234,6 +246,7 @@ export class UIManager {
         data,
         onClick: this.handleBookmarkClick.bind(this),
         onDelete: this.handleBookmarkDelete.bind(this),
+        draggable: true,
         showDeleteButton: true,
       });
     });
@@ -307,21 +320,99 @@ export class UIManager {
   private handleSpaceContextMenu(space: Space, event: MouseEvent): void {
     this.closeContextMenu();
 
-    this.currentContextMenu = new ContextMenu({
-      items: [
-        {
-          label: 'Delete space',
-          icon: '🗑️',
-          action: async () => {
-            await this.handleDeleteSpace(space);
-          },
+    const items: ContextMenuItem[] = [
+      {
+        label: 'Hide',
+        icon: '🙈',
+        action: async () => {
+          await this.handleHideSpace(space);
         },
-      ],
+      },
+    ];
+
+    // Restore entry point for hidden spaces (always reachable because the
+    // last visible space can never be hidden)
+    const hiddenSpaces = spaceManager.getHiddenSpaces();
+    if (hiddenSpaces.length > 0) {
+      items.push({
+        label: 'Show hidden',
+        icon: '👁️',
+        items: hiddenSpaces.map((hidden) => ({
+          label: hidden.name,
+          action: async () => {
+            await this.handleShowSpace(hidden.id);
+          },
+        })),
+      });
+    }
+
+    items.push({
+      label: 'Delete space',
+      icon: '🗑️',
+      action: async () => {
+        await this.handleDeleteSpace(space);
+      },
+    });
+
+    this.currentContextMenu = new ContextMenu({
+      items,
       position: { x: event.pageX, y: event.pageY },
       onClose: () => {
         this.currentContextMenu = null;
       },
     });
+  }
+
+  /**
+   * Hide a space after guards
+   */
+  private async handleHideSpace(space: Space): Promise<void> {
+    try {
+      if (spaceManager.isSwitching()) {
+        this.dialogs.toast('A space operation is already in progress. Please wait.');
+        return;
+      }
+
+      if (spaceManager.getSpaces().length <= 1) {
+        this.dialogs.toast('Cannot hide the only visible space.');
+        return;
+      }
+
+      const success = await spaceManager.hideSpace(space.id);
+      if (success) {
+        this.dialogs.toast(
+          `Space "${space.name}" hidden. Right-click a space to restore it.`,
+          4000,
+        );
+      } else {
+        this.dialogs.toast('Failed to hide space. Please try again.', 5000);
+      }
+    } catch (error) {
+      logger.error('UIManager', 'Error hiding space', {
+        spaceId: space.id,
+        spaceName: space.name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.dialogs.toast('Error hiding space. Please try again.', 5000);
+    }
+  }
+
+  /**
+   * Restore a hidden space
+   */
+  private async handleShowSpace(spaceId: string): Promise<void> {
+    try {
+      const success = await spaceManager.showSpace(spaceId);
+      if (!success) {
+        this.dialogs.toast('Failed to restore space. Please try again.', 5000);
+      }
+    } catch (error) {
+      logger.error('UIManager', 'Error showing space', {
+        spaceId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      this.dialogs.toast('Error restoring space. Please try again.', 5000);
+    }
   }
 
   /**
@@ -414,6 +505,24 @@ export class UIManager {
    */
   private handleSpaceDeleted(event: AppEvent): void {
     if (event.type !== EventType.SPACE_DELETED) return;
+
+    this.renderSpaces(spaceManager.getSpaces(), spaceManager.getCurrentSpaceId());
+  }
+
+  /**
+   * Handle space hidden event
+   */
+  private handleSpaceHidden(event: AppEvent): void {
+    if (event.type !== EventType.SPACE_HIDDEN) return;
+
+    this.renderSpaces(spaceManager.getSpaces(), spaceManager.getCurrentSpaceId());
+  }
+
+  /**
+   * Handle space shown event
+   */
+  private handleSpaceShown(event: AppEvent): void {
+    if (event.type !== EventType.SPACE_SHOWN) return;
 
     this.renderSpaces(spaceManager.getSpaces(), spaceManager.getCurrentSpaceId());
   }
@@ -547,26 +656,22 @@ export class UIManager {
     const currentSpaceId = spaceManager.getCurrentSpaceId();
     if (!currentSpaceId) return;
 
-    const currentSpace = spaceManager.getCurrentSpace();
-    if (!currentSpace) return;
-
-    // Create bookmark
+    // Create the bookmark; the bookmark change event triggers the debounced
+    // reload that refreshes the list, so there is no manual re-read here.
     await bookmarkManager.createBookmark(currentSpaceId, data.title, data.url);
 
-    // Refresh bookmarks
-    currentSpace.bookmarks = await bookmarkManager.getFolderBookmarks(currentSpaceId);
-    this.renderBookmarks(currentSpace.bookmarks);
-
-    // Close the tab
+    // Close the tab; the onRemoved listener removes it from the space.
     try {
       await chrome.tabs.remove(Number(data.id));
     } catch (error) {
+      // The tab is already gone (or cannot be closed), so onRemoved will not
+      // fire for it — fall back to dropping it from the space directly.
       logger.warn('UIManager', 'Error closing tab after drop', {
         tabId: data.id,
         error: error instanceof Error ? error.message : String(error),
       });
+      await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
     }
-    await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
   }
 
   /**
@@ -588,26 +693,32 @@ export class UIManager {
       }
     }
 
-    // Create the bookmark inside the pin folder
-    await bookmarkManager.createBookmark(pinFolder.id, data.title, data.url);
+    // Create/move the bookmark inside the pin folder
+    if (typeof data.id === 'string') {
+      // Dropped an existing bookmark: move it into the pin folder
+      await bookmarkManager.moveBookmark(data.id, pinFolder.id);
+    } else {
+      // Dropped a tab: create a new bookmark
+      await bookmarkManager.createBookmark(pinFolder.id, data.title, data.url);
 
-    // Refresh pinned bookmarks
-    await spaceManager.loadPinnedBookmarks();
-    this.renderPinnedBookmarks(spaceManager.getPinnedBookmarks());
+      // Close the tab; the onRemoved listener removes it from its space
+      try {
+        await chrome.tabs.remove(Number(data.id));
+      } catch (error) {
+        logger.warn('UIManager', 'Error closing tab after drop to pin', {
+          tabId: data.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        const currentSpaceId = spaceManager.getCurrentSpaceId();
+        if (currentSpaceId) {
+          await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
+        }
+      }
+    }
 
-    // Close the tab and remove it from its space (mirrors handleTabDrop)
-    try {
-      await chrome.tabs.remove(Number(data.id));
-    } catch (error) {
-      logger.warn('UIManager', 'Error closing tab after drop to pin', {
-        tabId: data.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-    const currentSpaceId = spaceManager.getCurrentSpaceId();
-    if (currentSpaceId) {
-      await spaceManager.removeTabFromSpace(currentSpaceId, Number(data.id));
-    }
+    // The bookmark change event (onCreated / onMoved) triggers the debounced
+    // reload, which refreshes both the pinned list and the current space's
+    // bookmark list. No manual re-read here.
   }
 
   /**
@@ -731,6 +842,7 @@ export class UIManager {
    * Destroy the UI manager
    */
   destroy(): void {
+    this.debouncedBookmarkReload.cancel();
     this.closeContextMenu();
     this.dialogs.destroy();
     this.pinnedList.destroy();

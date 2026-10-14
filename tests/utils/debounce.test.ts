@@ -26,6 +26,22 @@ describe('debounce utilities', () => {
       expect(fn).toHaveBeenCalledTimes(1);
       expect(fn).toHaveBeenCalledWith('space-3');
     });
+
+    it('cancel() drops a pending invocation and the function stays usable', () => {
+      vi.useFakeTimers();
+      const fn = vi.fn();
+      const debounced = debounce(fn, 100);
+
+      debounced('a');
+      debounced.cancel();
+      vi.advanceTimersByTime(200);
+      expect(fn).not.toHaveBeenCalled();
+
+      debounced('b');
+      vi.advanceTimersByTime(100);
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith('b');
+    });
   });
 
   describe('debounceAsync', () => {

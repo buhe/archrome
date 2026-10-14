@@ -3,6 +3,14 @@
  * Handles space loading, switching, and tab synchronization
  */
 
+import { debounce, delay } from '@utils/index';
+import { logger } from '@utils/index';
+
+import { bookmarkManager } from './BookmarkManager';
+import { storageManager } from './StorageManager';
+import { tabManager } from './TabManager';
+
+import { EventType, SwitchStatus, DEFAULT_CONFIG } from '@/types/index';
 import type {
   Space,
   BookmarkData,
@@ -10,14 +18,7 @@ import type {
   SwitchMetric,
   AppEvent,
   EventListener,
-} from '@types/index';
-import { EventType, SwitchStatus, DEFAULT_CONFIG } from '@types/index';
-import { debounce, delay } from '@utils/index';
-import { logger } from '@utils/index';
-
-import { bookmarkManager } from './BookmarkManager';
-import { storageManager } from './StorageManager';
-import { tabManager } from './TabManager';
+} from '@/types/index';
 
 
 /**
@@ -285,8 +286,12 @@ export class SpaceManager {
       // Update space with restored tabs
       newSpace.openTabs = restoredTabs.map((tab) => tabManager.chromeTabToTabData(tab));
 
-      // Step 3: Activate first restored tab
-      await tabManager.updateTab(restoredTabs[0].id, { active: true });
+      // Step 3: Activate first restored tab (skip id-less tabs — they cannot
+      // be activated anyway)
+      const firstRestored = restoredTabs[0];
+      if (firstRestored.id !== undefined) {
+        await tabManager.updateTab(firstRestored.id, { active: true });
+      }
 
       // Store and emit
       await storageManager.storeTabsImmediate(newSpaceId, newSpace.openTabs);

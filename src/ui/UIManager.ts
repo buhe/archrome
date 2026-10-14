@@ -6,8 +6,6 @@
 import { spaceManager } from '@managers/index';
 import { bookmarkManager } from '@managers/index';
 import { storageManager } from '@managers/index';
-import { EventType, DEFAULT_CONFIG } from '@types/index';
-import type { Space, BookmarkData, TabData, AppEvent, Theme, ContextMenuItem } from '@types/index';
 import type { DebouncedFunction } from '@utils/index';
 import { isEmoji } from '@utils/index';
 import { debounce } from '@utils/index';
@@ -15,6 +13,9 @@ import { logger } from '@utils/index';
 
 import { ListItemComponent, ListComponent, ContextMenu, LogViewer, DialogManager } from './components';
 import type { ListItemData } from './components/ListItemComponent';
+
+import type { Space, BookmarkData, TabData, AppEvent, Theme, ContextMenuItem } from '@/types/index';
+import { EventType, DEFAULT_CONFIG } from '@/types/index';
 
 /**
  * UI Manager class

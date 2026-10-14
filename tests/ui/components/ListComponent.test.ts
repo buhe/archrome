@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ListComponent } from '@ui/components/ListComponent';
 import { ListItemComponent } from '@ui/components/ListItemComponent';
-import type { TabData } from '@types/index';
+import type { TabData } from '@/types/index';
 
 // Space bookmark/tab lists in the sidebar show an empty message when there are no items
 describe('ListComponent', () => {

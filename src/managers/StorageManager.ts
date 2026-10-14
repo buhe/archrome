@@ -3,10 +3,11 @@
  * Provides debounced storage and a unified interface for data persistence
  */
 
-import type { TabData, SwitchMetric, Config, Theme } from '@types/index';
-import { STORAGE_KEYS, DEFAULT_CONFIG } from '@types/index';
 import { KeyedDebounce, cleanTabsData } from '@utils/index';
 import { logger } from '@utils/index';
+
+import type { TabData, SwitchMetric, Config, Theme } from '@/types/index';
+import { STORAGE_KEYS, DEFAULT_CONFIG } from '@/types/index';
 
 /**
  * Storage Manager class

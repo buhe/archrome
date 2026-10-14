@@ -2,8 +2,9 @@
  * List Item Component - Base class for list items (bookmarks, tabs)
  */
 
-import type { BookmarkData, TabData } from '@types/index';
 import { getFaviconUrl, getDisplayText } from '@utils/index';
+
+import type { BookmarkData, TabData } from '@/types/index';
 
 export type ListItemData = BookmarkData | TabData;
 
@@ -108,8 +109,9 @@ export class ListItemComponent {
         url: this.options.data.url,
         title: this.options.data.title,
       };
-      e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
-      e.dataTransfer.effectAllowed = 'move';
+      // dataTransfer is always present on dragstart events
+      e.dataTransfer!.setData('text/plain', JSON.stringify(dragData));
+      e.dataTransfer!.effectAllowed = 'move';
       element.classList.add('dragging');
     });
 

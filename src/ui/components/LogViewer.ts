@@ -2,10 +2,11 @@
  * Log Viewer Component - Modal for viewing logs and metrics
  */
 
-import type { LogEntry, SwitchMetric, LogFilter } from '@types/index';
-import { LogLevel } from '@types/index';
 import { logger } from '@utils/index';
 import { formatTime, exportAsJson } from '@utils/index';
+
+import type { LogEntry, SwitchMetric, LogFilter } from '@/types/index';
+import { LogLevel } from '@/types/index';
 
 export interface LogViewerOptions {
   modalId: string;
@@ -219,7 +220,14 @@ export class LogViewer {
     const statusClass = status === 'success' ? 'success' : status === 'failed' ? 'failed' : 'started';
     const duration = metric.duration ?? (metric.startTime ? Date.now() - metric.startTime : '-');
     const durationMs = typeof duration === 'number' ? `${duration}ms` : duration;
-    const durationClass = duration > 5000 ? 'very-slow' : duration > 2000 ? 'slow' : '';
+    const durationClass =
+      typeof duration === 'number'
+        ? duration > 5000
+          ? 'very-slow'
+          : duration > 2000
+            ? 'slow'
+            : ''
+        : '';
     const time = formatTime(metric.startTime);
 
     return `<div class="metric-row">

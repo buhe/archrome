@@ -5,8 +5,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SpaceManager } from '@managers/SpaceManager';
 import { storageManager } from '@managers/StorageManager';
-import { EventType } from '@types/index';
-import type { BookmarkTreeNode, Space } from '@types/index';
+import { EventType } from '@/types/index';
+import type { BookmarkTreeNode, Space } from '@/types/index';
 
 const SPACES_TREE = (): BookmarkTreeNode[] => [
   {

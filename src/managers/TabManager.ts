@@ -2,10 +2,11 @@
  * Tab Manager - Handles all Chrome tabs API operations
  */
 
-import type { TabData, Config, TabRestoreOptions } from '@types/index';
-import { DEFAULT_CONFIG } from '@types/index';
 import { isValidUrl, delay, retryWithBackoff } from '@utils/index';
 import { logger } from '@utils/index';
+
+import type { TabData, Config, TabRestoreOptions } from '@/types/index';
+import { DEFAULT_CONFIG } from '@/types/index';
 
 /**
  * Tab Manager class
@@ -377,7 +378,7 @@ export class TabManager {
   /**
    * Move a tab to a different position/window
    */
-  async moveTab(tabId: number, properties: { index?: number; windowId?: number }): Promise<boolean> {
+  async moveTab(tabId: number, properties: { index: number; windowId?: number }): Promise<boolean> {
     try {
       // Ensure Chrome API is ready before moving tab
       if (!(await this.ensureChromeApiReady())) {
@@ -408,7 +409,7 @@ export class TabManager {
         return null;
       }
 
-      return await chrome.tabs.duplicate(tabId);
+      return (await chrome.tabs.duplicate(tabId)) ?? null;
     } catch (error) {
       logger.error('TabManager', 'Error duplicating tab', {
         tabId,
@@ -423,7 +424,9 @@ export class TabManager {
    */
   chromeTabToTabData(tab: chrome.tabs.Tab): TabData {
     return {
-      id: tab.id,
+      // Tab.id is optional in @types/chrome (prerendered/speculative tabs);
+      // -1 never matches a real tab id, so such tabs simply never activate.
+      id: tab.id ?? -1,
       url: tab.url ?? tab.pendingUrl ?? '',
       title: tab.title ?? '',
       favIconUrl: tab.favIconUrl ?? null,

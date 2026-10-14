@@ -2,7 +2,7 @@
  * Context Menu Component - Custom context menu for tabs and bookmarks
  */
 
-import type { ContextMenuItem } from '@types/index';
+import type { ContextMenuItem } from '@/types/index';
 
 export interface ContextMenuOptions {
   items: ContextMenuItem[];

@@ -3,8 +3,8 @@
  * Provides persistent logging with configurable levels
  */
 
-import type { LogEntry, LogLevel } from '@types/index';
-import { STORAGE_KEYS, DEFAULT_CONFIG } from '@types/index';
+import type { LogEntry, LogLevel } from '@/types/index';
+import { STORAGE_KEYS, DEFAULT_CONFIG } from '@/types/index';
 
 // Enable/disable console logging
 const CONSOLE_LOG_ENABLED = true;

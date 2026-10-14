@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BookmarkManager } from '@managers/BookmarkManager';
-import type { BookmarkTreeNode } from '@types/index';
+import type { BookmarkTreeNode } from '@/types/index';
 
 const TREE_WITH_SPACES = (extra: BookmarkTreeNode[] = []): BookmarkTreeNode[] => [
   {

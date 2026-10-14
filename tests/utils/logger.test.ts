@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Logger } from '@utils/logger';
-import { LogLevel, STORAGE_KEYS } from '@types/index';
+import { LogLevel, STORAGE_KEYS } from '@/types/index';
 
 describe('Logger', () => {
   let logger: Logger;

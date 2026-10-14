@@ -19,7 +19,6 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@types/*": ["src/types/*"],
       "@managers/*": ["src/managers/*"],
       "@ui/*": ["src/ui/*"],
       "@utils/*": ["src/utils/*"],

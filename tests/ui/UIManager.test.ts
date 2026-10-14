@@ -52,8 +52,8 @@ vi.mock('@managers/index', () => ({
 }));
 
 import { UIManager } from '@ui/UIManager';
-import { EventType, DEFAULT_CONFIG } from '@types/index';
-import type { Space, BookmarkData, TabData } from '@types/index';
+import { EventType, DEFAULT_CONFIG } from '@/types/index';
+import type { Space, BookmarkData, TabData } from '@/types/index';
 
 function setupDom() {
   document.body.innerHTML = `

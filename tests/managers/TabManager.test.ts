@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TabManager } from '@managers/TabManager';
-import type { TabData } from '@types/index';
+import type { TabData } from '@/types/index';
 
 describe('TabManager', () => {
   let tm: TabManager;

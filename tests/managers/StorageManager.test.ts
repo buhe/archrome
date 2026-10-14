@@ -4,8 +4,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { StorageManager } from '@managers/StorageManager';
-import { STORAGE_KEYS } from '@types/index';
-import type { TabData } from '@types/index';
+import { STORAGE_KEYS } from '@/types/index';
+import type { TabData } from '@/types/index';
 import { logger } from '@utils/logger';
 
 const TABS: TabData[] = [

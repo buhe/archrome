@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ListItemComponent } from '@ui/components/ListItemComponent';
-import type { TabData } from '@types/index';
+import type { TabData } from '@/types/index';
 
 // Sidebar bookmark/tab rows (favicon + title + optional delete button)
 describe('ListItemComponent', () => {

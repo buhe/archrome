@@ -72,7 +72,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
-      '@types': resolve(__dirname, 'src/types'),
       '@managers': resolve(__dirname, 'src/managers'),
       '@ui': resolve(__dirname, 'src/ui'),
       '@utils': resolve(__dirname, 'src/utils'),

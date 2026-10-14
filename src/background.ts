@@ -4,8 +4,9 @@
  */
 
 import { storageManager } from '@managers/index';
-import { DEFAULT_CONFIG } from '@types/index';
 import { logger } from '@utils/index';
+
+import { DEFAULT_CONFIG } from '@/types/index';
 
 /**
  * Heartbeat interval to keep service worker alive

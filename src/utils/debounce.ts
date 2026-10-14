@@ -5,7 +5,7 @@
 /**
  * A debounced function with a cancel method for clearing pending invocations
  */
-export interface DebouncedFunction<T extends (...args: unknown[]) => unknown> {
+export interface DebouncedFunction<T extends (...args: never[]) => unknown> {
   (...args: Parameters<T>): void;
   cancel(): void;
 }
@@ -14,7 +14,7 @@ export interface DebouncedFunction<T extends (...args: unknown[]) => unknown> {
  * Creates a debounced function that delays invoking func until after wait milliseconds
  * have elapsed since the last time the debounced function was invoked.
  */
-export function debounce<T extends (...args: unknown[]) => unknown>(
+export function debounce<T extends (...args: never[]) => unknown>(
   func: T,
   wait: number,
 ): DebouncedFunction<T> {
@@ -44,7 +44,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 /**
  * Creates a debounced async function that returns a promise
  */
-export function debounceAsync<T extends (...args: unknown[]) => Promise<unknown>>(
+export function debounceAsync<T extends (...args: never[]) => Promise<unknown>>(
   func: T,
   wait: number,
 ): (...args: Parameters<T>) => Promise<ReturnType<T>> {
@@ -72,7 +72,7 @@ export function debounceAsync<T extends (...args: unknown[]) => Promise<unknown>
       timeoutId = setTimeout(async () => {
         try {
           if (pendingArgs) {
-            const result = await func(...pendingArgs);
+            const result = (await func(...pendingArgs)) as ReturnType<T>;
             if (pendingResolve) pendingResolve(result);
           }
         } catch (error) {
@@ -91,7 +91,7 @@ export function debounceAsync<T extends (...args: unknown[]) => Promise<unknown>
 /**
  * Creates a throttled function that only invokes func at most once per every wait milliseconds
  */
-export function throttle<T extends (...args: unknown[]) => unknown>(
+export function throttle<T extends (...args: never[]) => unknown>(
   func: T,
   wait: number,
 ): (...args: Parameters<T>) => void {

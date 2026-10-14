@@ -2,9 +2,10 @@
  * Bookmark Manager - Handles all Chrome bookmarks API operations
  */
 
-import type { BookmarkData, BookmarkTreeNode } from '@types/index';
 import { extractIconAndName } from '@utils/index';
 import { logger } from '@utils/index';
+
+import type { BookmarkData, BookmarkTreeNode } from '@/types/index';
 
 /**
  * Bookmark Manager class

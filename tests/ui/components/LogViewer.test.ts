@@ -4,8 +4,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LogViewer } from '@ui/components/LogViewer';
-import { LogLevel, STORAGE_KEYS } from '@types/index';
-import type { LogEntry, SwitchMetric } from '@types/index';
+import { LogLevel, STORAGE_KEYS } from '@/types/index';
+import type { LogEntry, SwitchMetric } from '@/types/index';
 
 function setupDom() {
   document.body.innerHTML = `

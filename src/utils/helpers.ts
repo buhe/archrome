@@ -2,7 +2,7 @@
  * Helper utility functions
  */
 
-import type { TabData } from '@types/index';
+import type { BookmarkData, TabData } from '@/types/index';
 
 /**
  * Check if a character is an emoji
@@ -79,23 +79,23 @@ export function cleanTabsData(tabs: TabData[], maxTabs: number): TabData[] {
 }
 
 /**
- * Get favicon URL for a tab
+ * Get favicon URL for a tab or bookmark
  */
-export function getFaviconUrl(tab: TabData | chrome.tabs.Tab): string {
+export function getFaviconUrl(item: TabData | BookmarkData | chrome.tabs.Tab): string {
   // For chrome:// URLs, use default icon
-  if (tab.url?.startsWith('chrome://')) {
+  if (item.url?.startsWith('chrome://')) {
     return 'icons/default_favicon.png';
   }
 
   // Use favicon from tab if available
-  if ('favIconUrl' in tab && tab.favIconUrl) {
-    return tab.favIconUrl;
+  if ('favIconUrl' in item && item.favIconUrl) {
+    return item.favIconUrl;
   }
 
-  // For tabs with URL, use Google's favicon service
-  if (tab.url && !tab.url.startsWith('about:')) {
+  // For items with URL, use Google's favicon service
+  if (item.url && !item.url.startsWith('about:')) {
     try {
-      const hostname = new URL(tab.url).hostname;
+      const hostname = new URL(item.url).hostname;
       return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=16`;
     } catch {
       // Invalid URL, use default
